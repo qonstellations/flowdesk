@@ -57,4 +57,11 @@ def format_ticket_reply(
     str
         A user-friendly, Markdown-formatted reply string.
     """
-    raise NotImplementedError("Not yet implemented")
+    return (
+        f"🎫 *Ticket #{ticket_id} Created Successfully*\n\n"
+        f"• *Category:* {category}\n"
+        f"• *Priority:* {priority}\n"
+        f"• *SLA Deadline:* {sla_deadline}\n\n"
+        f"We have assigned this ticket to the responsible department and will resolve it shortly."
+    )
+
