@@ -6,8 +6,6 @@ appropriate page based on user selection.
 """
 """FlowDesk admin dashboard entry point."""
 
-"""FlowDesk admin dashboard entry point."""
-
 import streamlit as st
 
 from components.metrics_bar import render_metrics_bar
