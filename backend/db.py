@@ -1,4 +1,5 @@
-"""SQLite database access layer for FlowDesk.
+"""
+SQLite database access layer for FlowDesk.
 
 Provides connection management, table initialisation, and CRUD helpers
 for users, tickets, events, and notifications.
