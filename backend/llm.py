@@ -90,7 +90,13 @@ def call_gemini(prompt: str, response_schema: dict | None = None) -> dict:
                     if matches:
                         chosen_model = matches[0]
                     else:
-                        chosen_model = available_models[0]
+                        # If user customized OLLAMA_MODEL, respect it.
+                        # Otherwise, fallback to the first available model.
+                        if os.getenv("OLLAMA_MODEL") and os.getenv("OLLAMA_MODEL") != "llama3":
+                            print(f"Configured Ollama model '{ollama_model}' not found in available models: {available_models}. Respecting explicit user configuration.")
+                            chosen_model = ollama_model
+                        else:
+                            chosen_model = available_models[0]
 
             print(f"Attempting Ollama fallback call with model: {chosen_model}")
 
