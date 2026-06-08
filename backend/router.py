@@ -25,4 +25,9 @@ def route_ticket(category: str) -> str:
     str
         The department name that should handle this ticket.
     """
-    raise NotImplementedError("Not yet implemented")
+    if not category:
+        return "General Admin"
+        
+    cleaned = category.strip()
+    return constants.DEPARTMENT_ROUTING.get(cleaned, "General Admin")
+
