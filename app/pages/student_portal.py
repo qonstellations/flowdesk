@@ -3,7 +3,7 @@ import streamlit as st
 import backend.db as db
 from backend.constants import CATEGORIES, PRIORITIES
 from backend.models import TicketCreate, UserCreate
-from components.event_timeline import show_event_timeline
+from components.ticket_detail import render_ticket_detail
 from components.ticket_table import render_ticket_table
 
 
@@ -67,22 +67,8 @@ def _show_ticket_detail(ticket_id: int) -> None:
     if not ticket:
         st.error(f"Ticket #{ticket_id} not found.")
         return
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Status", ticket["status"])
-    col2.metric("Priority", ticket["priority"])
-    col3.metric("Category", ticket["category"])
-    sla = ticket.get("sla_deadline", "")
-    col4.metric("SLA Deadline", sla[:10] if sla else "—")
-
-    with st.expander("📄 Full Description"):
-        st.write(ticket["description"])
-        if ticket.get("location"):
-            st.caption(f"📍 {ticket['location']}")
-
-    st.markdown("---")
     events = db.get_events_by_ticket(ticket_id)
-    show_event_timeline(events)
+    render_ticket_detail(ticket, events, role="student")
 
 
 def _show_complaint_form(telegram_id: str) -> None:

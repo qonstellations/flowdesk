@@ -1,11 +1,8 @@
-from datetime import datetime, timezone
-
 import streamlit as st
 
 import backend.db as db
-from backend.models import TicketUpdate
-from components.event_timeline import show_event_timeline
 from components.metrics_bar import render_metrics_bar
+from components.ticket_detail import render_ticket_detail
 from components.ticket_table import render_ticket_table
 
 _DEPARTMENTS = [
@@ -16,16 +13,6 @@ _DEPARTMENTS = [
     "Academic Office",
     "General Admin",
 ]
-
-_ALLOWED_TRANSITIONS: dict[str, list[str]] = {
-    "Open":       ["In Progress"],
-    "Assigned":   ["In Progress"],
-    "In Progress":["Resolved"],
-    "Resolved":   ["Closed", "Reopened"],
-    "Reopened":   ["In Progress"],
-    "Escalated":  ["In Progress", "Resolved"],
-    "Closed":     [],
-}
 
 
 def render() -> None:
@@ -82,46 +69,5 @@ def _show_ticket_actions(ticket_id: int) -> None:
     if not ticket:
         st.error(f"Ticket #{ticket_id} not found.")
         return
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Status", ticket["status"])
-    col2.metric("Priority", ticket["priority"])
-    col3.metric("Category", ticket["category"])
-    sla = ticket.get("sla_deadline", "")
-    if sla:
-        try:
-            dl = datetime.fromisoformat(sla)
-            if dl.tzinfo is None:
-                dl = dl.replace(tzinfo=timezone.utc)
-            overdue = datetime.now(timezone.utc) > dl and ticket["status"] not in ("Resolved", "Closed")
-            col4.metric("SLA", "⚠ OVERDUE" if overdue else sla[:10])
-        except Exception:
-            col4.metric("SLA", sla[:10])
-    else:
-        col4.metric("SLA", "—")
-
-    with st.expander("📄 Description"):
-        st.write(ticket["description"])
-        if ticket.get("location"):
-            st.caption(f"📍 {ticket['location']}")
-
-    transitions = _ALLOWED_TRANSITIONS.get(ticket["status"], [])
-    if transitions:
-        col_s, col_b = st.columns([2, 1])
-        new_status = col_s.selectbox("Move to", transitions, key=f"staff_ns_{ticket_id}")
-        col_b.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
-        if col_b.button("✓ Update", key=f"staff_upd_{ticket_id}", use_container_width=True, type="primary"):
-            update = TicketUpdate(status=new_status)
-            if new_status == "Resolved":
-                update = TicketUpdate(status=new_status, resolved_at=datetime.now(timezone.utc).isoformat())
-            elif new_status == "Closed":
-                update = TicketUpdate(status=new_status, closed_at=datetime.now(timezone.utc).isoformat())
-            db.update_ticket(ticket_id, update)
-            st.success(f"Ticket #{ticket_id} moved to **{new_status}**.")
-            st.rerun()
-    else:
-        st.info("No further transitions available for this ticket.")
-
-    st.markdown("---")
     events = db.get_events_by_ticket(ticket_id)
-    show_event_timeline(events)
+    render_ticket_detail(ticket, events, role="staff")

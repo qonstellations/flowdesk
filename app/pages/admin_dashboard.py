@@ -4,9 +4,10 @@ import streamlit as st
 
 import backend.db as db
 from backend.models import NotificationCreate, TicketUpdate
-from components.event_timeline import show_event_timeline
 from components.metrics_bar import render_metrics_bar
+from components.ticket_detail import render_ticket_detail
 from components.ticket_table import render_ticket_table
+
 
 
 def render() -> None:
@@ -140,46 +141,8 @@ def _show_ticket_detail(ticket_id: int) -> None:
     if not ticket:
         st.error(f"Ticket #{ticket_id} not found.")
         return
-
-    st.markdown(f"**#{ticket['ticket_id']} — {ticket['title']}**")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Status", ticket["status"])
-    col2.metric("Priority", ticket["priority"])
-    col3.metric("Category", ticket["category"])
-
-    col4, col5 = st.columns(2)
-    col4.metric("Assigned Dept", ticket.get("assigned_dept") or "—")
-    sla = ticket.get("sla_deadline", "")
-    col5.metric("SLA Deadline", sla[:16].replace("T", " ") if sla else "—")
-
-    with st.expander("Description"):
-        st.write(ticket["description"])
-
-    st.markdown("**Change Status**")
-    new_status = st.selectbox(
-        "New status",
-        ["Open", "Assigned", "In Progress", "Resolved", "Escalated", "Closed", "Reopened"],
-        index=["Open", "Assigned", "In Progress", "Resolved", "Escalated", "Closed", "Reopened"].index(
-            ticket["status"]
-        ) if ticket["status"] in ["Open", "Assigned", "In Progress", "Resolved", "Escalated", "Closed", "Reopened"] else 0,
-        key=f"admin_status_{ticket_id}",
-    )
-    if st.button("Apply Status Change", key=f"admin_apply_{ticket_id}"):
-        if new_status != ticket["status"]:
-            update = TicketUpdate(status=new_status)
-            if new_status == "Resolved":
-                update = TicketUpdate(status=new_status, resolved_at=datetime.now(timezone.utc).isoformat())
-            elif new_status == "Closed":
-                update = TicketUpdate(status=new_status, closed_at=datetime.now(timezone.utc).isoformat())
-            db.update_ticket(ticket_id, update)
-            st.success(f"Status updated to {new_status}.")
-            st.rerun()
-        else:
-            st.warning("Status unchanged.")
-
     events = db.get_events_by_ticket(ticket_id)
-    show_event_timeline(events)
+    render_ticket_detail(ticket, events, role="admin")
 
 
 def _run_escalation_check() -> int:
