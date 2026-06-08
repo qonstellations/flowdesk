@@ -4,36 +4,34 @@
 Sets up page configuration, sidebar navigation, and routes to the
 appropriate page based on user selection.
 """
+"""FlowDesk admin dashboard entry point."""
+
+"""FlowDesk admin dashboard entry point.
+
+Sets up the dashboard page and displays the metrics bar, ticket table,
+and event timeline.
+"""
 
 import streamlit as st
 
-from app.pages import admin_dashboard, staff_dashboard, student_portal
+from components.metrics_bar import render_metrics_bar
+from components.ticket_table import render_ticket_table
+from components.event_timeline import show_event_timeline
 
-# Navigation options mapped to their render functions
-_PAGES: dict[str, callable] = {
-    "Student Portal": student_portal.render,
-    "Staff Dashboard": staff_dashboard.render,
-    "Admin Dashboard": admin_dashboard.render,
-}
+st.title("FlowDesk Dashboard")
 
+# fake data for now — replace with real SQLite data later
+tickets = [
+    {"id": 1, "title": "Wifi down", "status": "Open", "created_at": "10:00"},
+    {"id": 2, "title": "Fan broken", "status": "Escalated", "created_at": "11:00"},
+    {"id": 3, "title": "Mess food cold", "status": "Resolved", "created_at": "09:00"},
+]
 
-def main() -> None:
-    """Configure the Streamlit page and render the selected page.
+render_metrics_bar({"Open": 1, "Escalated": 1, "Resolved": 1})
+render_ticket_table(tickets)
 
-    Sets the page title to 'FlowDesk' with a wide layout, displays a
-    sidebar for navigation, and delegates rendering to the chosen page
-    module.
-    """
-    st.set_page_config(page_title="FlowDesk", layout="wide")
-
-    st.sidebar.title("FlowDesk")
-    selection = st.sidebar.radio("Navigate", list(_PAGES.keys()))
-
-    # Route to the selected page
-    page_render = _PAGES.get(selection)
-    if page_render is not None:
-        page_render()
-
-
-if __name__ == "__main__":
-    main()
+show_event_timeline([
+    {"action": "CLASSIFIED", "timestamp": "10:00"},
+    {"action": "ROUTED", "timestamp": "10:01"},
+    {"action": "ESCALATED", "timestamp": "14:00"},
+])
