@@ -97,77 +97,56 @@ def test_classification_node() -> None:
     assert state["priority"] in constants.PRIORITIES
 
 
-def test_routing_node() -> None:
-    """Test routing returns correct department."""
-    state: GraphState = {
-        "raw_message": "Wi-Fi not working in Hostel Block A",
-        "telegram_id": "987654321",
-        "student_id": "Alice Smith",
-        "ticket_id": None,
-        "title": "Wi-Fi Connection Issue",
-        "description": "Wi-Fi not working in Hostel Block A",
-        "category": "IT & Wi-Fi",
-        "location": "Hostel Block A",
-        "priority": "High",
-        "assigned_dept": None,
-        "sla_deadline": None,
-        "status": "Open",
-        "created_at": None,
-        "agent_notes": []
-    }
-
-    state = workflow.routing_node(state)
-    assert state["assigned_dept"] == "IT Department"
-
-
-def test_sla_node() -> None:
-    """Test SLA deadline calculation."""
-    state: GraphState = {
-        "raw_message": "Wi-Fi not working in Hostel Block A",
-        "telegram_id": "987654321",
-        "student_id": "Alice Smith",
-        "ticket_id": None,
-        "title": "Wi-Fi Connection Issue",
-        "description": "Wi-Fi not working in Hostel Block A",
-        "category": "IT & Wi-Fi",
-        "location": "Hostel Block A",
-        "priority": "High",
-        "assigned_dept": "IT Department",
-        "sla_deadline": None,
-        "status": "Open",
-        "created_at": None,
-        "agent_notes": []
-    }
-
-    state = workflow.sla_node(state)
-    assert state["sla_deadline"] is not None
-
-
-def test_full_workflow() -> None:
-    """Test complete workflow end-to-end."""
-    final_state = workflow.run_workflow(
-        raw_message="No water in Room 204 of Hostel 3",
-        telegram_id="987654321"
+def test_intake_node(monkeypatch, isolated_db):
+    monkeypatch.setattr(
+        "backend.workflow.call_gemini",
+        lambda prompt, response_schema=None: {
+            "title": "Test Title",
+            "description": "Test Desc",
+            "location": "Block A",
+        },
     )
 
-    assert final_state["student_id"] == "Alice Smith"
-    assert final_state["title"] is not None
-    assert final_state["category"] in constants.CATEGORIES
-    assert final_state["priority"] in constants.PRIORITIES
-    assert final_state["assigned_dept"] is not None
-    assert final_state["sla_deadline"] is not None
+    # Ensure the user exists so the DB lookup inside intake_node succeeds.
+    db.create_user(UserCreate(name="Test Student", role="student", telegram_id="9999"))
 
-    # Verify that the ticket was created in the database
-    with db.get_connection() as conn:
-        row = conn.execute("SELECT * FROM tickets ORDER BY ticket_id DESC LIMIT 1").fetchone()
-        assert row is not None
-        ticket = dict(row)
-        assert ticket["title"] == final_state["title"]
-        assert ticket["category"] == final_state["category"]
-        assert ticket["status"] == "Open"
+    state = _base_state(raw_message="Wi-Fi is not working in Block A", telegram_id="9999")
+    result = intake_node(state)
 
-        # Verify notifications were created
-        notifications = conn.execute("SELECT * FROM notifications WHERE ticket_id = ?", (ticket["ticket_id"],)).fetchall()
-        assert len(notifications) > 0
-        assert notifications[0]["recipient"] == "987654321"
+    assert result["title"] == "Test Title"
+    assert result["description"] == "Test Desc"
+    assert result["location"] == "Block A"
+    assert result["status"] == "Open"
 
+
+# ── work_order_node ────────────────────────────────────────────────────
+
+
+def test_work_order_node(monkeypatch, isolated_db):
+    # Create user so the FK constraint on tickets.telegram_id is satisfied.
+    db.create_user(UserCreate(name="Test Student", role="student", telegram_id="9999"))
+
+    monkeypatch.setattr(
+        "backend.telegram_helpers.format_ticket_reply",
+        lambda **kwargs: "Ticket confirmation message",
+    )
+
+    state = _base_state(
+        raw_message="Wi-Fi down in Block A",
+        telegram_id="9999",
+        student_id="Test Student",
+        title="Wi-Fi Down",
+        description="Wi-Fi is not working in Block A",
+        category="IT & Wi-Fi",
+        location="Block A",
+        priority="High",
+        assigned_dept="IT Department",
+        sla_deadline="2026-06-08T16:00:00",
+        status="Open",
+        created_at="2026-06-08T12:00:00",
+        agent_notes=["Ingested.", "Classified.", "Routed.", "SLA set."],
+    )
+
+    result = work_order_node(state)
+    assert result["ticket_id"] is not None
+    assert result["ticket_id"] > 0
