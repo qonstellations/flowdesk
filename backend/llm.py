@@ -17,64 +17,141 @@ load_dotenv()
 
 
 def call_gemini(prompt: str, response_schema: dict | None = None) -> dict:
-    """Call the Gemini API using httpx and return the parsed JSON response.
+    """Call the LLM using the Google GenAI SDK with Ollama fallback.
 
-    If LLM_API_KEY is not configured or the API call fails, falls back
-    to a mock classification/extraction logic to keep the system robust.
+    If Google GenAI fails or quota is exhausted, falls back to Ollama.
+    If Ollama is not configured or fails, falls back to the mock response.
     """
     api_key = os.getenv("LLM_API_KEY")
-    if not api_key:
-        return _get_mock_response(prompt, response_schema)
+    model = os.getenv("LLM_MODEL", "gemini-2.0-flash")
 
-    model = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    gemini_succeeded = False
+    result = None
 
-    payload = {
-        "contents": [
-            {
-                "parts": [
+    if api_key:
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+
+            config = types.GenerateContentConfig(
+                temperature=0.1,
+            )
+            if response_schema:
+                config.response_mime_type = "application/json"
+                config.response_schema = response_schema
+
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config
+            )
+
+            text = response.text
+            if not text:
+                raise ValueError("Empty response text from Gemini")
+
+            if response_schema:
+                result = json.loads(text)
+            else:
+                result = {"text": text}
+            gemini_succeeded = True
+
+        except Exception as e:
+            error_msg = str(e)
+            if api_key in error_msg:
+                error_msg = error_msg.replace(api_key, "***REDACTED***")
+            print(f"Gemini API call failed using google-genai: {error_msg}. Falling back to Ollama.")
+
+    if not gemini_succeeded:
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
+
+        try:
+            # 1. Fetch available models from Ollama to pick a valid model
+            available_models = []
+            try:
+                res = httpx.get(f"{ollama_host}/api/tags", timeout=5.0)
+                if res.status_code == 200:
+                    models = res.json().get("models", [])
+                    available_models = [m["name"] for m in models]
+            except Exception as tag_err:
+                print(f"Failed to fetch models from Ollama: {tag_err}")
+
+            # 2. Match configured model or pick first available
+            chosen_model = ollama_model
+            if available_models:
+                if ollama_model in available_models:
+                    chosen_model = ollama_model
+                else:
+                    # Check if there is a partial match (e.g. "llama3" matches "llama3:8b...")
+                    matches = [m for m in available_models if ollama_model in m]
+                    if matches:
+                        chosen_model = matches[0]
+                    else:
+                        chosen_model = available_models[0]
+
+            print(f"Attempting Ollama fallback call with model: {chosen_model}")
+
+            payload = {
+                "model": chosen_model,
+                "messages": [
                     {
-                        "text": prompt
+                        "role": "user",
+                        "content": prompt
                     }
-                ]
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0.1
+                }
             }
-        ],
-        "generationConfig": {
-            "temperature": 0.1,
-        }
-    }
 
-    if response_schema:
-        payload["generationConfig"]["responseMimeType"] = "application/json"
-        payload["generationConfig"]["responseSchema"] = response_schema
+            if response_schema:
+                # Clean the schema (lowercase types)
+                cleaned_schema = _clean_schema_for_ollama(response_schema)
+                payload["format"] = cleaned_schema
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": api_key,
-    }
+            res = httpx.post(f"{ollama_host}/api/chat", json=payload, timeout=30.0)
+            if res.status_code == 200:
+                res_json = res.json()
+                content = res_json.get("message", {}).get("content", "")
+                if not content:
+                    raise ValueError("Empty response content from Ollama")
 
-    try:
-        response = httpx.post(url, json=payload, headers=headers, timeout=30.0)
-        response.raise_for_status()
-        res_json = response.json()
+                if response_schema:
+                    result = json.loads(content)
+                else:
+                    result = {"text": content}
+                print("Ollama call succeeded.")
+            else:
+                raise ValueError(f"Ollama returned status {res.status_code}: {res.text}")
 
-        candidates = res_json.get("candidates", [])
-        if not candidates:
-            raise ValueError(f"No candidates returned in Gemini response: {res_json}")
+        except Exception as ollama_err:
+            print(f"Ollama call failed: {ollama_err}. Falling back to mock response.")
 
-        text = candidates[0]["content"]["parts"][0]["text"]
+    if result is None:
+        result = _get_mock_response(prompt, response_schema)
 
-        if response_schema:
-            return json.loads(text)
-        return {"text": text}
-    except Exception as e:
-        # Sanitize error message to avoid leaking the API key
-        error_msg = str(e)
-        if api_key in error_msg:
-            error_msg = error_msg.replace(api_key, "***REDACTED***")
-        # Fallback to mock response on failure to make it robust for demos/tests
-        print(f"Gemini API Call failed: {error_msg}. Falling back to mock response.")
-        return _get_mock_response(prompt, response_schema)
+    return result
+
+
+def _clean_schema_for_ollama(s):
+    if isinstance(s, dict):
+        new_s = {}
+        for k, v in s.items():
+            if k == "type" and isinstance(v, str):
+                new_s[k] = v.lower()
+            else:
+                new_s[k] = _clean_schema_for_ollama(v)
+        return new_s
+    elif isinstance(s, list):
+        return [_clean_schema_for_ollama(item) for item in s]
+    return s
+
+
+
 
 
 def _get_mock_response(prompt: str, response_schema: dict | None = None) -> dict:

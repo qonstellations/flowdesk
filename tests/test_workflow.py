@@ -94,7 +94,7 @@ def test_classification_node(monkeypatch):
 
 def test_intake_node(monkeypatch, isolated_db):
     monkeypatch.setattr(
-        "backend.llm.call_gemini",
+        "backend.workflow.call_gemini",
         lambda prompt, response_schema=None: {
             "title": "Test Title",
             "description": "Test Desc",
