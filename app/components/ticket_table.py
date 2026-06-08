@@ -4,18 +4,23 @@ Renders a list of tickets as an interactive Streamlit table and returns
 the selected ticket ID, if any.
 """
 
-import pandas as pd
+"""Reusable ticket table component for FlowDesk.
+
+Renders a list of tickets as a table, newest first.
+"""
+
 import streamlit as st
 
 
-def render_ticket_table(tickets: list[dict]) -> int | None:
-    """Render a ticket table and return the selected ticket ID.
+def render_ticket_table(tickets: list) -> None:
+    """Render tickets as a table, newest first.
 
     Args:
-        tickets: A list of ticket dictionaries to display.
-
-    Returns:
-        The ``ticket_id`` of the selected row, or ``None`` if no
-        selection was made.
+        tickets: A list of ticket dictionaries.
     """
-    pass
+    if not tickets:
+        st.write("No tickets yet.")
+        return
+
+    rows = sorted(tickets, key=lambda t: t["created_at"], reverse=True)
+    st.table(rows)
