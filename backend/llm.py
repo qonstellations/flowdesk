@@ -27,7 +27,7 @@ def call_gemini(prompt: str, response_schema: dict | None = None) -> dict:
         return _get_mock_response(prompt, response_schema)
 
     model = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     payload = {
         "contents": [
@@ -48,7 +48,10 @@ def call_gemini(prompt: str, response_schema: dict | None = None) -> dict:
         payload["generationConfig"]["responseMimeType"] = "application/json"
         payload["generationConfig"]["responseSchema"] = response_schema
 
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
 
     try:
         response = httpx.post(url, json=payload, headers=headers, timeout=30.0)
@@ -65,15 +68,32 @@ def call_gemini(prompt: str, response_schema: dict | None = None) -> dict:
             return json.loads(text)
         return {"text": text}
     except Exception as e:
+        # Sanitize error message to avoid leaking the API key
+        error_msg = str(e)
+        if api_key in error_msg:
+            error_msg = error_msg.replace(api_key, "***REDACTED***")
         # Fallback to mock response on failure to make it robust for demos/tests
-        # We print to stderr/log, but don't crash
-        print(f"Gemini API Call failed: {e}. Falling back to mock response.")
+        print(f"Gemini API Call failed: {error_msg}. Falling back to mock response.")
         return _get_mock_response(prompt, response_schema)
 
 
 def _get_mock_response(prompt: str, response_schema: dict | None = None) -> dict:
     """Generate mock data based on the prompt/schema for fallback/testing."""
     prompt_lower = prompt.lower()
+
+    if response_schema and "is_valid" in response_schema.get("properties", {}):
+        from backend.complaint_validation import validate_complaint_text
+
+        message_text = prompt
+        message_match = re.search(r'student message:\s*"(.*?)"', prompt, re.DOTALL | re.IGNORECASE)
+        if message_match:
+            message_text = message_match.group(1).strip()
+
+        validation = validate_complaint_text(message_text)
+        return {
+            "is_valid": validation.is_valid,
+            "rejection_reason": validation.rejection_reason,
+        }
     
     # Check if the schema is for Category/Priority classification
     if response_schema and "category" in response_schema.get("properties", {}):

@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from backend import db, telegram_helpers
+from backend.complaint_validation import validate_complaint_text
 
 # Load .env file so TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_URL, etc. are available
 load_dotenv()
@@ -122,52 +123,22 @@ async def telegram_webhook(request: Request) -> JSONResponse:
         await _handle_command(message_text, telegram_id, chat_id, user_name)
         return JSONResponse(content={"status": "ok"})
 
-    # ── Show typing indicator while processing ──
-    telegram_helpers.send_typing_action(chat_id)
-
-    # ── Auto-register user if first time ──
-    _ensure_user_exists(telegram_id, user_name)
-
-    # ── Run the agentic workflow ──
-    try:
-        from backend.workflow import run_workflow
-
-        final_state = run_workflow(
-            raw_message=message_text,
-            telegram_id=telegram_id,
-        )
-    except Exception as exc:
-        logger.exception("Workflow failed for telegram_id=%s", telegram_id)
-        telegram_helpers.send_message(
-            chat_id,
-            "⚠️ Sorry, something went wrong processing your complaint. "
-            "Please try again or contact the admin directly.",
-        )
-        return JSONResponse(content={"status": "error", "detail": str(exc)})
-
-    # ── Send confirmation reply to the student ──
-    ticket_id = final_state.get("ticket_id")
-    category = final_state.get("category", "Unknown")
-    priority = final_state.get("priority", "Medium")
-    sla_deadline = final_state.get("sla_deadline", "TBD")
-
-    reply = telegram_helpers.format_ticket_reply(
-        ticket_id=ticket_id,
-        category=category,
-        priority=priority,
-        sla_deadline=sla_deadline,
-    )
-    telegram_helpers.send_message(chat_id, reply)
-
-    logger.info(
-        "Ticket #%s created for telegram_id=%s (category=%s, priority=%s)",
-        ticket_id,
-        telegram_id,
-        category,
-        priority,
+    # ── Natural language fallback — redirect to /ticket or /help ──
+    telegram_helpers.send_message(
+        chat_id,
+        "💬 Hey! I'm not able to process free-text messages directly.\n"
+        "\n"
+        "To create a support ticket, use:\n"
+        "`/ticket <describe your issue>`\n"
+        "\n"
+        "For example:\n"
+        "• `/ticket Wi-Fi not working in Hostel Block A`\n"
+        "• `/ticket Water leakage in Room 204`\n"
+        "\n"
+        "Type /help to see all available commands.",
     )
 
-    return JSONResponse(content={"status": "ok", "ticket_id": ticket_id})
+    return JSONResponse(content={"status": "ok"})
 
 
 # ── Internal helpers ────────────────────────────────────────────────────
@@ -275,15 +246,15 @@ async def _handle_command(
             chat_id,
             f"👋 *Welcome to FlowDesk, {user_name}!*\n"
             f"\n"
-            f"I'm your campus complaint assistant. Just send me a message "
-            f"describing your issue, and I'll create a tracked ticket for you.\n"
+            f"I'm your campus complaint assistant. Use the /ticket command "
+            f"to raise a support ticket.\n"
             f"\n"
-            f"*Examples:*\n"
-            f"• _Wi-Fi is not working in Hostel Block A_\n"
-            f"• _Water leakage in Room 204_\n"
-            f"• _Mess food quality has been poor this week_\n"
+            f"*Quick start:*\n"
+            f"`/ticket Wi-Fi is not working in Hostel Block A`\n"
+            f"`/ticket Water leakage in Room 204`\n"
+            f"`/ticket Mess food quality has been poor this week`\n"
             f"\n"
-            f"Type /help for more info.",
+            f"Type /help for all commands.",
         )
         # Auto-register on /start
         _ensure_user_exists(telegram_id, user_name)
@@ -293,16 +264,20 @@ async def _handle_command(
             chat_id,
             "ℹ️ *FlowDesk Help*\n"
             "\n"
-            "Just type your complaint as a normal message and I'll handle the rest!\n"
+            "Use `/ticket` followed by your complaint to raise a support ticket.\n"
             "\n"
             "*Commands:*\n"
             "/start — Welcome message\n"
             "/help — This help text\n"
+            "/ticket — Create a support ticket\n"
             "/status — Check your recent tickets\n"
             "\n"
+            "*Example:*\n"
+            "`/ticket Wi-Fi not working in Hostel Block A`\n"
+            "\n"
             "*How it works:*\n"
-            "1️⃣ You describe the issue\n"
-            "2️⃣ AI classifies & routes it\n"
+            "1️⃣ You describe the issue with /ticket\n"
+            "2️⃣ AI validates, classifies & routes it\n"
             "3️⃣ You get a ticket ID + SLA deadline\n"
             "4️⃣ Staff resolves the issue\n"
             "5️⃣ You get notified when it's done",
@@ -313,7 +288,7 @@ async def _handle_command(
         if not tickets:
             telegram_helpers.send_message(
                 chat_id,
-                "📋 You have no tickets yet. Send me a complaint to get started!",
+                "📋 You have no tickets yet. Use `/ticket <your issue>` to create one!",
             )
         else:
             # Show the 5 most recent tickets
@@ -336,8 +311,184 @@ async def _handle_command(
                 )
             telegram_helpers.send_message(chat_id, "\n\n".join(lines))
 
+    elif command in ("/ticket", "/ticket@flowdeskbot"):
+        await _handle_ticket_command(message_text, telegram_id, chat_id, user_name)
+
     else:
         telegram_helpers.send_message(
             chat_id,
             "🤔 Unknown command. Type /help to see available commands.",
         )
+
+
+async def _handle_ticket_command(
+    message_text: str,
+    telegram_id: str,
+    chat_id: str,
+    user_name: str,
+) -> None:
+    """Handle the ``/ticket <description>`` command.
+
+    Validates the complaint before creating a real ticket through the
+    workflow.
+
+    Parameters
+    ----------
+    message_text:
+        The full message text (starts with ``/ticket``).
+    telegram_id:
+        The sender's Telegram user ID.
+    chat_id:
+        The chat to reply to.
+    user_name:
+        The sender's display name.
+    """
+    # Extract the complaint text after "/ticket"
+    parts = message_text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        telegram_helpers.send_message(
+            chat_id,
+            "📝 Please describe your issue after the /ticket command.\n"
+            "\n"
+            "*Usage:* `/ticket <describe your issue>`\n"
+            "\n"
+            "*Examples:*\n"
+            "• `/ticket Wi-Fi not working in Hostel Block A`\n"
+            "• `/ticket Water leakage in Room 204`",
+        )
+        return
+
+    complaint_text = parts[1].strip()
+
+    validation = validate_complaint_text(complaint_text)
+    if not validation.is_valid:
+        telegram_helpers.send_message(
+            chat_id,
+            "❌ *Ticket not created.*\n"
+            "\n"
+            f"{validation.rejection_reason}\n"
+            "\n"
+            "Please describe a real campus issue and try again.\n"
+            "*Example:* `/ticket Wi-Fi not working in Hostel Block A`",
+        )
+        logger.info(
+            "Ticket rejected by deterministic validation for telegram_id=%s — reason: %s",
+            telegram_id,
+            validation.rejection_reason,
+        )
+        return
+
+    # ── Show typing indicator while validating ──
+    telegram_helpers.send_typing_action(chat_id)
+
+    # ── LLM validation gate ──
+    from backend.llm import call_gemini
+
+    validation_prompt = f"""You are a ticket validation agent for a university campus helpdesk called FlowDesk.
+Your job is to decide whether a student's message is a LEGITIMATE campus complaint that deserves a support ticket.
+
+REJECT the message (is_valid = false) if it is:
+- Random gibberish, keyboard mashing, or test messages (e.g. "asdfgh", "test", "hello", "123")
+- Greetings or casual chat (e.g. "hi", "what's up", "how are you")
+- Jokes, memes, or trolling
+- Completely empty or meaningless content
+- Not related to a campus facility, service, or academic issue at all
+- Abusive spam with no real complaint
+
+ACCEPT the message (is_valid = true) if it describes any real issue, even if vaguely, related to:
+- Infrastructure (Wi-Fi, electricity, water, maintenance)
+- Hostel or campus facilities
+- Mess or food quality
+- Academics (grades, exams, scheduling)
+- Any genuine campus concern
+
+Be lenient with grammar and spelling — students may type quickly. Focus on whether there is a REAL issue being described.
+
+Student message:
+"{complaint_text}"
+"""
+
+    validation_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "is_valid": {
+                "type": "BOOLEAN",
+                "description": "true if this is a legitimate campus complaint, false if garbage/spam/irrelevant"
+            },
+            "rejection_reason": {
+                "type": "STRING",
+                "description": "A brief, friendly explanation of why the ticket was rejected (only used when is_valid is false)"
+            }
+        },
+        "required": ["is_valid", "rejection_reason"]
+    }
+
+    try:
+        result = call_gemini(validation_prompt, response_schema=validation_schema)
+        is_valid = result.get("is_valid", True)
+        rejection_reason = result.get("rejection_reason", "")
+    except Exception:
+        # If validation fails, err on the side of accepting
+        logger.warning("Ticket validation LLM call failed — accepting by default.")
+        is_valid = True
+        rejection_reason = ""
+
+    if not is_valid:
+        telegram_helpers.send_message(
+            chat_id,
+            "❌ *Ticket not created.*\n"
+            "\n"
+            f"{rejection_reason}\n"
+            "\n"
+            "Please describe a real campus issue and try again.\n"
+            "*Example:* `/ticket Wi-Fi not working in Hostel Block A`",
+        )
+        logger.info(
+            "Ticket rejected for telegram_id=%s — reason: %s",
+            telegram_id,
+            rejection_reason,
+        )
+        return
+
+    # ── Complaint is valid — auto-register and run the workflow ──
+    _ensure_user_exists(telegram_id, user_name)
+
+    telegram_helpers.send_typing_action(chat_id)
+
+    try:
+        from backend.workflow import run_workflow
+
+        final_state = run_workflow(
+            raw_message=complaint_text,
+            telegram_id=telegram_id,
+        )
+    except Exception as exc:
+        logger.exception("Workflow failed for telegram_id=%s", telegram_id)
+        telegram_helpers.send_message(
+            chat_id,
+            "⚠️ Sorry, something went wrong processing your complaint. "
+            "Please try again or contact the admin directly.",
+        )
+        return
+
+    # ── Send confirmation reply to the student ──
+    ticket_id = final_state.get("ticket_id")
+    category = final_state.get("category", "Unknown")
+    priority = final_state.get("priority", "Medium")
+    sla_deadline = final_state.get("sla_deadline", "TBD")
+
+    reply = telegram_helpers.format_ticket_reply(
+        ticket_id=ticket_id,
+        category=category,
+        priority=priority,
+        sla_deadline=sla_deadline,
+    )
+    telegram_helpers.send_message(chat_id, reply)
+
+    logger.info(
+        "Ticket #%s created for telegram_id=%s (category=%s, priority=%s)",
+        ticket_id,
+        telegram_id,
+        category,
+        priority,
+    )
