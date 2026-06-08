@@ -43,7 +43,6 @@ Maintaining a Streamlit app that supports:
 
 - Student ticket tracking
 - Optional student manual complaint form for demo fallback
-- Staff dashboard for assigned tickets
 - Admin dashboard for all tickets
 - Ticket tables
 - Ticket detail view
@@ -58,7 +57,6 @@ Maintaining a Streamlit app that supports:
 The app should support at least:
 
 - Student Portal
-- Staff Dashboard
 - Admin Dashboard
 
 You may choose the internal structure inside `app/`, such as:
@@ -153,6 +151,6 @@ Before finishing, verify:
 - The app can show SLA deadlines.
 - The app can show escalated tickets.
 - The app can show ticket event timelines.
-- Staff/admin actions call backend functions.
+- Admin actions call backend functions.
 - No backend files were edited.
 - No files outside `app/` were edited.
