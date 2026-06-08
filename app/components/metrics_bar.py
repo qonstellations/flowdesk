@@ -14,3 +14,6 @@ def render_metrics_bar(metrics: dict) -> None:
         metrics: A dictionary mapping metric labels to their values.
     """
     pass
+
+# temp test — delete later
+render_metrics_bar({"Open": 2, "Escalated": 1, "Resolved": 1})
