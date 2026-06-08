@@ -15,10 +15,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from backend import db, telegram_helpers
+
+# Load .env file so TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_URL, etc. are available
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

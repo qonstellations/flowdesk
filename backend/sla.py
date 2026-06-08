@@ -32,4 +32,17 @@ def calculate_sla_deadline(priority: str, created_at: str) -> str:
     ValueError
         If *priority* is not recognised.
     """
-    raise NotImplementedError("Not yet implemented")
+    if priority not in constants.SLA_HOURS:
+        raise ValueError(
+            f"Invalid priority '{priority}'. Must be one of {list(constants.SLA_HOURS.keys())}"
+        )
+
+    try:
+        dt = datetime.fromisoformat(created_at)
+    except Exception as e:
+        raise ValueError(f"Invalid created_at timestamp format '{created_at}': {e}")
+
+    hours = constants.SLA_HOURS[priority]
+    deadline_dt = dt + timedelta(hours=hours)
+    return deadline_dt.isoformat()
+
