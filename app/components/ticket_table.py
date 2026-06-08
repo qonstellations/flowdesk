@@ -24,3 +24,8 @@ def render_ticket_table(tickets: list) -> None:
 
     rows = sorted(tickets, key=lambda t: t["created_at"], reverse=True)
     st.table(rows)
+    # temp test — delete later
+render_ticket_table([
+    {"id": 1, "title": "Wifi down", "status": "Open", "created_at": "10:00"},
+    {"id": 2, "title": "Fan broken", "status": "Escalated", "created_at": "11:00"},
+])
