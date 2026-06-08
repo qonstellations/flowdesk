@@ -147,20 +147,16 @@ button[data-testid="collapsedControl"]    { display: none !important; }
 }
 .role-card-student { border: 1px solid rgba(0,229,255,0.2); }
 .role-card-student::before { background: linear-gradient(90deg, transparent, #00E5FF, transparent); }
-.role-card-staff   { border: 1px solid rgba(124,77,255,0.2); }
-.role-card-staff::before   { background: linear-gradient(90deg, transparent, #7C4DFF, transparent); }
 .role-card-admin   { border: 1px solid rgba(255,165,0,0.2); }
 .role-card-admin::before   { background: linear-gradient(90deg, transparent, #FFA500, transparent); }
 
 .role-card:hover { transform: translateY(-6px); box-shadow: 0 14px 48px rgba(0,0,0,0.5); }
 .role-card-student:hover { border-color: rgba(0,229,255,0.5);  box-shadow: 0 14px 48px rgba(0,229,255,0.12); }
-.role-card-staff:hover   { border-color: rgba(124,77,255,0.5); box-shadow: 0 14px 48px rgba(124,77,255,0.12); }
 .role-card-admin:hover   { border-color: rgba(255,165,0,0.5);  box-shadow: 0 14px 48px rgba(255,165,0,0.12); }
 
 .role-icon  { font-size: 3rem; margin-bottom: 1rem; }
 .role-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
 .role-title-student { color: #00E5FF; }
-.role-title-staff   { color: #a78bfa; }
 .role-title-admin   { color: #FFA500; }
 .role-desc  { font-size: 0.88rem; color: rgba(224,230,244,0.45); line-height: 1.6; margin-bottom: 1.8rem; }
 
@@ -376,7 +372,7 @@ with nav_col2:
 
 
 # ── Page routing ──────────────────────────────────────────────────────────
-from pages import admin_dashboard, staff_dashboard, student_portal  # noqa: E402
+from pages import admin_dashboard, student_portal  # noqa: E402
 
 page = st.session_state.page
 
@@ -390,7 +386,7 @@ if page == "landing":
     </div>
     """, unsafe_allow_html=True)
 
-    gap, c1, c2, c3, _ = st.columns([0.5, 2, 2, 2, 0.5])
+    _, c1, c2, _ = st.columns([1, 2, 2, 1])
 
     with c1:
         st.markdown("""
@@ -406,19 +402,6 @@ if page == "landing":
             st.rerun()
 
     with c2:
-        st.markdown("""
-        <div class="role-card role-card-staff">
-            <div class="role-icon">👷</div>
-            <div class="role-title role-title-staff">Staff Dashboard</div>
-            <div class="role-desc">View assigned tickets, update statuses, and resolve campus issues efficiently.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
-        if st.button("Enter as Staff →", key="btn_staff", use_container_width=True, type="primary"):
-            st.session_state.page = "login_staff"
-            st.rerun()
-
-    with c3:
         st.markdown("""
         <div class="role-card role-card-admin">
             <div class="role-icon">⚙️</div>
@@ -453,30 +436,6 @@ elif page == "login_student":
             else:
                 st.error("Please enter your Telegram ID.")
 
-# ── Login: Staff ───────────────────────────────────────────────────────────
-elif page == "login_staff":
-    _, mid, _ = st.columns([1, 2, 1])
-    with mid:
-        st.markdown("""
-        <div class="login-header">
-            <div class="login-title" style="color:#a78bfa">👷 Staff Login</div>
-            <div class="login-back">Enter your details to access your assigned tickets</div>
-        </div>
-        """, unsafe_allow_html=True)
-        name = st.text_input("Your Name", placeholder="e.g. Priya Verma")
-        dept = st.selectbox("Department", [
-            "IT & Wi-Fi", "Hostel Maintenance", "Campus Maintenance",
-            "Mess & Food", "Academics", "General Admin"
-        ])
-        st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
-        if st.button("Access Staff Dashboard →", use_container_width=True, type="primary"):
-            if name.strip():
-                st.session_state.user_name = name.strip()
-                st.session_state.staff_dept = dept
-                st.session_state.page = "portal_staff"
-                st.rerun()
-            else:
-                st.error("Please enter your name.")
 
 # ── Login: Admin ───────────────────────────────────────────────────────────
 elif page == "login_admin":
@@ -501,8 +460,6 @@ elif page == "login_admin":
 elif page == "portal_student":
     student_portal.render()
 
-elif page == "portal_staff":
-    staff_dashboard.render()
 
 elif page == "portal_admin":
     admin_dashboard.render()
