@@ -147,30 +147,46 @@ button[data-testid="collapsedControl"]    { display: none !important; }
 }
 
 /* ── Streamlit pills (nav) ─────────────────────────── */
-div[data-testid="stPills"] > div {
-    gap: 6px !important;
+[data-testid="stButtonGroup"] {
+    gap: 12px !important;
+    justify-content: center !important;
 }
-div[data-testid="stPills"] button {
-    background: rgba(16,24,46,0.85) !important;
-    border: 1px solid rgba(0,229,255,0.18) !important;
-    border-radius: 10px !important;
-    color: #8A94B8 !important;
+/* Inactive pills */
+[data-testid="stBaseButton-pills"] {
+    background: rgba(16,24,50,0.9) !important;
+    border: 1.5px solid rgba(0,229,255,0.28) !important;
+    border-radius: 14px !important;
+    color: #9AAAC8 !important;
     font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 0.88rem !important;
-    padding: 9px 22px !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    padding: 14px 40px !important;
+    letter-spacing: 0.03em !important;
     transition: all 0.2s ease !important;
+    min-width: 200px !important;
 }
-div[data-testid="stPills"] button:hover {
-    background: rgba(0,229,255,0.08) !important;
-    border-color: rgba(0,229,255,0.4) !important;
+[data-testid="stBaseButton-pills"]:hover {
+    background: rgba(0,229,255,0.1) !important;
+    border-color: rgba(0,229,255,0.6) !important;
     color: #00E5FF !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 24px rgba(0,229,255,0.18) !important;
 }
-div[data-testid="stPills"] button[aria-selected="true"] {
-    background: linear-gradient(135deg, rgba(0,229,255,0.18), rgba(124,77,255,0.18)) !important;
-    border-color: rgba(0,229,255,0.5) !important;
+/* Active / selected pill */
+[data-testid="stBaseButton-pillsActive"] {
+    background: linear-gradient(135deg, rgba(0,229,255,0.22), rgba(124,77,255,0.22)) !important;
+    border: 1.5px solid #00E5FF !important;
+    border-radius: 14px !important;
     color: #00E5FF !important;
-    box-shadow: 0 0 18px rgba(0,229,255,0.15) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    padding: 14px 40px !important;
+    letter-spacing: 0.03em !important;
+    min-width: 200px !important;
+    box-shadow: 0 0 28px rgba(0,229,255,0.28), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+    text-shadow: 0 0 14px rgba(0,229,255,0.55) !important;
+    transition: all 0.2s ease !important;
 }
 
 /* ── Streamlit buttons ─────────────────────────────── */
@@ -251,7 +267,7 @@ pipeline_html += "</div>"
 st.markdown(pipeline_html, unsafe_allow_html=True)
 
 # ── Navigation ────────────────────────────────────────────────────────────
-_, nav_col, _ = st.columns([1, 3, 1])
+_, nav_col, _ = st.columns([0.5, 4, 0.5])
 with nav_col:
     page = st.pills(
         "Navigation",
