@@ -13,13 +13,3 @@ dependencies = [
     "streamlit>=1.58.0",
     "uvicorn>=0.49.0",
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-]
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.3",
-]

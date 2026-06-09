@@ -2,16 +2,17 @@
 
 ## 1. Purpose
 
-This file defines the agentic workflow for FlowDesk. Keep the workflow deterministic and demo-safe. The system should feel autonomous, but it must not become unpredictable.
+This file defines the agentic workflow for FlowDesk. Keep the workflow deterministic, reliable, and product-safe. The system should feel autonomous, but it must not become unpredictable or hide failures behind fake success states.
 
 ## 2. LangGraph Rule
 
 Use LangGraph as a state machine, not as a free-form multi-agent chat system.
 
-The MVP graph must be mostly linear:
+The initial ticket creation graph should be mostly linear:
 
 START
 → Intake Agent
+→ Clarification Agent, only if required details are missing
 → Classification Agent
 → Routing Agent
 → SLA Agent
@@ -19,7 +20,7 @@ START
 → Save Ticket State
 → END
 
-Escalation and verification can run separately from the initial complaint flow.
+Escalation, staff resolution, and student verification can run separately from the initial complaint creation flow.
 
 ## 3. Shared State Object
 
@@ -39,6 +40,9 @@ The graph state should contain:
 * status: str (default: Open)
 * created_at: str optional
 * agent_notes: list[str]
+* needs_clarification: bool optional
+* clarification_questions: list[str] optional
+* clarification_answers: dict optional
 
 ## 4. Agent Responsibilities
 
@@ -46,18 +50,25 @@ The graph state should contain:
 
 Input:
 
-* Raw student complaint
+* Raw student complaint after `/ticket`
+* Any answers collected through follow-up questions
 
 Output:
 
 * Clean title
 * Clean description
 * Extracted location if available
+* `needs_clarification` if the complaint is too incomplete to route responsibly
+* Short follow-up questions when required
 
 Rules:
 
-* Do not reject unclear complaints.
-* If location is missing, still create the ticket but mark location as `Unknown`.
+* `/ticket` is the entry point for complaint creation.
+* The text after `/ticket` can be natural language.
+* Ask follow-up questions only when the complaint lacks information needed to create a useful ticket.
+* Do not force a form-like conversation when the initial complaint is already clear enough.
+* If location is missing but the category and issue are still actionable, create the ticket and mark location as `Unknown`.
+* Reject obvious spam, random text, and casual chat before creating a ticket.
 
 ### Classification Agent
 
@@ -148,11 +159,7 @@ Rules:
 
 ## 5. Escalation Engine
 
-The escalation engine can be a separate script:
-
-`scripts/run_escalations.py`
-
-It should:
+The escalation engine should be callable from application code and reusable by the admin dashboard or a scheduled job. It should:
 
 * Find tickets where current time > sla_deadline
 * Ignore tickets with status Closed or Resolved
@@ -160,20 +167,12 @@ It should:
 * Add an event with action ESCALATED
 * Add a notification record
 
-## 6. Streamlit Demo Requirement
-
-The admin dashboard must include a button:
-
-`Trigger SLA Engine`
-
-When clicked, it should run the escalation check so judges can see overdue tickets escalate during the live demo.
-
-## 7. Strict Limits
-
-Do not add RAG in the MVP.
+## 6. Strict Limits
 
 Do not add autonomous agent debate.
 
 Do not add loops unless needed for missing information.
 
 Do not let the LLM invent departments, statuses, categories, or priority values.
+
+Do not add test-only branches, random IDs, or fake success fallbacks to production workflow code.

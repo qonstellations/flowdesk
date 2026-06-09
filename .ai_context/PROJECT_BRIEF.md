@@ -16,7 +16,7 @@ Campus complaints are usually scattered across WhatsApp groups, verbal reports, 
 
 FlowDesk converts student complaints into structured, trackable tickets. It uses an agentic workflow to classify the complaint, assign the correct department, set an SLA deadline, create a work order, escalate overdue tickets, and maintain an auditable event timeline.
 
-## 5. Final Beginner-Friendly Tech Stack
+## 5. MVP Tech Stack
 
 * Python 3.13+
 * Telegram Bot for student complaint intake
@@ -25,7 +25,7 @@ FlowDesk converts student complaints into structured, trackable tickets. It uses
 * LLM Provider API for complaint understanding
 * SQLite for local database
 * Streamlit for staff/admin/student dashboard
-* Plotly for analytics charts
+* Plotly or Streamlit-native charts for analytics
 
 ## 6. Architecture Rule
 
@@ -33,7 +33,9 @@ The project must stay Python-first. Do not add React, MongoDB, Supabase, Docker 
 
 ## 7. Application Flow
 
-Student sends complaint on Telegram
+Student starts a complaint with `/ticket`
+→ Bot accepts a natural-language complaint after the command
+→ If required details are missing, bot asks short follow-up questions
 → FastAPI receives message
 → LangGraph runs the agent workflow
 → LLM classifies and structures the issue
@@ -43,7 +45,17 @@ Student sends complaint on Telegram
 
 ## 8. MVP Scope
 
-Only support these categories for the hackathon MVP:
+Build the proper MVP before optimizing for any presentation. The MVP should support the complete core ticket lifecycle:
+
+* Student complaint intake through Telegram
+* Optional conversational clarification after `/ticket` when the issue is incomplete
+* Ticket classification, priority assignment, department routing, and SLA creation
+* Staff/admin status updates
+* SLA escalation
+* Student status tracking and verification/reopen flow
+* Audit-ready event timeline
+
+Only support these categories in the MVP:
 
 * IT & Wi-Fi
 * Hostel Maintenance
@@ -52,8 +64,6 @@ Only support these categories for the hackathon MVP:
 * Academics
 * Other
 
-Focus deeply on Hostel Maintenance and IT & Wi-Fi for the live demo.
+## 9. Product Goal
 
-## 9. Demo Goal
-
-The demo must prove that FlowDesk is not just a complaint dashboard. It must show an issue moving autonomously from student complaint to classification, routing, SLA assignment, escalation, staff resolution, and student verification.
+FlowDesk must become a coherent end-to-end issue-resolution product, not a collection of disconnected screens. Testing should be added after the core layers and contracts are stable; tests should validate behavior from outside the app rather than adding test-only branches or fake behavior into production code.

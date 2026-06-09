@@ -28,16 +28,12 @@ def intake_node(state: GraphState) -> GraphState:
     raw_message = state.get("raw_message", "")
     telegram_id = state.get("telegram_id")
     
-    # 1. Lookup student from database, or fallback to a dummy if DB is not implemented/configured
+    # 1. Lookup student from database for ticket attribution.
     student_id = None
     if telegram_id:
-        try:
-            student = db.get_user_by_telegram_id(telegram_id)
-            if student:
-                student_id = student.get("name")
-        except (NotImplementedError, Exception):
-            # Fallback when database functions are not yet implemented or fail
-            student_id = f"student_{telegram_id}"
+        student = db.get_user_by_telegram_id(telegram_id)
+        if student:
+            student_id = student.get("name")
             
     # 2. Call LLM to extract title, description, location
     prompt = f"""You are the Intake Agent for FlowDesk, an issue resolution platform.
@@ -176,87 +172,78 @@ def work_order_node(state: GraphState) -> GraphState:
     Creates the ticket record, updates ``ticket_id`` in state, and
     queues a confirmation notification.
     """
-    ticket_id = None
-    try:
-        from backend.models import (
-            EventCreate,
-            NotificationCreate,
-            TicketCreate,
-            TicketUpdate,
-        )
-        from backend import telegram_helpers
+    from backend.models import (
+        EventCreate,
+        NotificationCreate,
+        TicketCreate,
+        TicketUpdate,
+    )
+    from backend import telegram_helpers
 
-        # 1. Create the ticket record with core fields
-        ticket_data = TicketCreate(
-            telegram_id=state.get("telegram_id") or "Unknown",
-            title=state.get("title") or "Untitled Ticket",
-            description=state.get("description") or "",
-            raw_message=state.get("raw_message") or "",
-            category=state.get("category") or "Other",
-            location=state.get("location") or "Unknown",
-            priority=state.get("priority") or "Medium"
-        )
-        ticket_id = db.create_ticket(ticket_data)
+    # 1. Create the ticket record with core fields
+    ticket_data = TicketCreate(
+        telegram_id=state.get("telegram_id") or "Unknown",
+        title=state.get("title") or "Untitled Ticket",
+        description=state.get("description") or "",
+        raw_message=state.get("raw_message") or "",
+        category=state.get("category") or "Other",
+        location=state.get("location") or "Unknown",
+        priority=state.get("priority") or "Medium"
+    )
+    ticket_id = db.create_ticket(ticket_data)
 
-        # 2. Set additional fields (status, assigned_dept, sla_deadline) via TicketUpdate
-        update_data = TicketUpdate(
-            status=state.get("status") or "Open",
-            assigned_dept=state.get("assigned_dept"),
-            sla_deadline=state.get("sla_deadline")
-        )
-        db.update_ticket(ticket_id, update_data)
+    # 2. Set additional fields (status, assigned_dept, sla_deadline) via TicketUpdate
+    update_data = TicketUpdate(
+        status=state.get("status") or "Open",
+        assigned_dept=state.get("assigned_dept"),
+        sla_deadline=state.get("sla_deadline")
+    )
+    db.update_ticket(ticket_id, update_data)
 
-        # 3. Log initial system events for the ticket
-        db.create_event(EventCreate(
-            ticket_id=ticket_id,
-            actor_type="student",
-            actor_name=state.get("student_id") or "student",
-            action="TICKET_CREATED",
-            details="Ticket submitted via Telegram"
-        ))
-        db.create_event(EventCreate(
-            ticket_id=ticket_id,
-            actor_type="system",
-            actor_name="agent",
-            action="CLASSIFIED",
-            details=f"Category: {state.get('category')}, Priority: {state.get('priority')}"
-        ))
-        db.create_event(EventCreate(
-            ticket_id=ticket_id,
-            actor_type="system",
-            actor_name="agent",
-            action="ROUTED",
-            details=f"Assigned to {state.get('assigned_dept')}"
-        ))
-        db.create_event(EventCreate(
-            ticket_id=ticket_id,
-            actor_type="system",
-            actor_name="agent",
-            action="SLA_ASSIGNED",
-            details=f"Deadline set to {state.get('sla_deadline')}"
-        ))
+    # 3. Log initial system events for the ticket
+    db.create_event(EventCreate(
+        ticket_id=ticket_id,
+        actor_type="student",
+        actor_name=state.get("student_id") or "student",
+        action="TICKET_CREATED",
+        details="Ticket submitted via Telegram"
+    ))
+    db.create_event(EventCreate(
+        ticket_id=ticket_id,
+        actor_type="system",
+        actor_name="agent",
+        action="CLASSIFIED",
+        details=f"Category: {state.get('category')}, Priority: {state.get('priority')}"
+    ))
+    db.create_event(EventCreate(
+        ticket_id=ticket_id,
+        actor_type="system",
+        actor_name="agent",
+        action="ROUTED",
+        details=f"Assigned to {state.get('assigned_dept')}"
+    ))
+    db.create_event(EventCreate(
+        ticket_id=ticket_id,
+        actor_type="system",
+        actor_name="agent",
+        action="SLA_ASSIGNED",
+        details=f"Deadline set to {state.get('sla_deadline')}"
+    ))
 
-        # 4. Generate user-facing reply and queue notification
-        reply_msg = telegram_helpers.format_ticket_reply(
-            ticket_id=ticket_id,
-            category=state.get("category") or "Other",
-            priority=state.get("priority") or "Medium",
-            sla_deadline=state.get("sla_deadline") or "N/A"
-        )
-        db.create_notification(NotificationCreate(
-            ticket_id=ticket_id,
-            recipient=state.get("telegram_id") or "Unknown",
-            channel="telegram",
-            message=reply_msg,
-            status="pending"
-        ))
-
-    except (NotImplementedError, Exception) as e:
-        # Fallback when database functions are not yet implemented or fail during testing
-        print(f"Database persist skipped in work_order_node (expected if db is not implemented): {e}")
-        if ticket_id is None:
-            import random
-            ticket_id = random.randint(1000, 9999)
+    # 4. Generate user-facing reply and queue notification
+    reply_msg = telegram_helpers.format_ticket_reply(
+        ticket_id=ticket_id,
+        category=state.get("category") or "Other",
+        priority=state.get("priority") or "Medium",
+        sla_deadline=state.get("sla_deadline") or "N/A"
+    )
+    db.create_notification(NotificationCreate(
+        ticket_id=ticket_id,
+        recipient=state.get("telegram_id") or "Unknown",
+        channel="telegram",
+        message=reply_msg,
+        status="pending"
+    ))
 
     agent_notes = list(state.get("agent_notes") or [])
     agent_notes.append(f"Ticket saved with ID {ticket_id} and confirmation notification queued.")
@@ -347,4 +334,3 @@ def run_workflow(
     app = build_graph()
     final_state = app.invoke(initial_state)
     return final_state
-

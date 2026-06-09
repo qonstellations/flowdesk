@@ -1,7 +1,7 @@
 """LLM helper utilities for FlowDesk.
 
 Provides wrappers around the Google Gemini API using standard HTTP client calls.
-Includes robust fallback/mock responses if the API key is not configured.
+Includes fallback responses if the API key is not configured.
 """
 
 from __future__ import annotations
@@ -161,7 +161,7 @@ def _clean_schema_for_ollama(s):
 
 
 def _get_mock_response(prompt: str, response_schema: dict | None = None) -> dict:
-    """Generate mock data based on the prompt/schema for fallback/testing."""
+    """Generate deterministic fallback data based on the prompt/schema."""
     prompt_lower = prompt.lower()
 
     if response_schema and "is_valid" in response_schema.get("properties", {}):

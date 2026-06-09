@@ -163,4 +163,8 @@ Use SQLite at:
 
 `data/flowdesk.db`
 
-Do not migrate to PostgreSQL during the hackathon unless SQLite becomes a real blocker.
+Do not migrate away from SQLite until the MVP product flow is coherent and SQLite becomes a real blocker.
+
+## 8. Testing Rule
+
+Testing belongs outside the production app code. Do not add test-only flags, fake data branches, random fallback IDs, or special testing paths to runtime modules.
