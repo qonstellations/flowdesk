@@ -1,11 +1,15 @@
 import sys
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
+from dotenv import load_dotenv
 
 import backend.db as db
+
+load_dotenv()
 
 st.set_page_config(
     page_title="FlowDesk",
@@ -387,6 +391,11 @@ if "page" not in st.session_state:
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 
+user = getattr(st, "user", None)
+is_google_student_logged_in = bool(user and getattr(user, "is_logged_in", False))
+if is_google_student_logged_in and st.session_state.page in ("landing", "login_student"):
+    st.session_state.page = "portal_student"
+
 # ── Navbar ────────────────────────────────────────────────────────────────
 back_label = "← Back" if st.session_state.page != "landing" else ""
 nav_col1, nav_col2 = st.columns([8, 1])
@@ -468,7 +477,7 @@ if page == "landing":
         <div class="role-card role-card-admin">
             <div class="role-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFA500" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg></div>
             <div class="role-title role-title-admin">Admin Dashboard</div>
-            <div class="role-desc">Full system oversight — metrics, SLA enforcement, escalations, and analytics.</div>
+            <div class="role-desc">Full system oversight — metrics, target resolution, escalations, and analytics.</div>
         </div>
         """, unsafe_allow_html=True)
         st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
@@ -483,20 +492,17 @@ elif page == "login_student":
         st.markdown("""
         <div class="login-header">
             <div class="login-title" style="color:#00E5FF"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> Student Login</div>
-            <div class="login-back">Enter your Telegram ID to access your tickets</div>
+            <div class="login-back">Sign in with Google to access your tickets</div>
         </div>
         """, unsafe_allow_html=True)
-        telegram_id = st.text_input("Telegram ID", placeholder="e.g. @yourusername")
-        name = st.text_input("Your Name", placeholder="e.g. Rahul Sharma")
         st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
-        if st.button("Access Student Portal →", use_container_width=True, type="primary"):
-            if telegram_id.strip():
-                st.session_state.user_name = name or telegram_id
-                st.session_state.student_telegram_id = telegram_id.strip()
-                st.session_state.page = "portal_student"
-                st.rerun()
-            else:
-                st.error("Please enter your Telegram ID.")
+        user = getattr(st, "user", None)
+        is_logged_in = bool(user and getattr(user, "is_logged_in", False))
+        if is_logged_in:
+            st.session_state.page = "portal_student"
+            st.rerun()
+        else:
+            student_portal.render_login_button()
 
 
 # ── Login: Admin ───────────────────────────────────────────────────────────
@@ -512,11 +518,14 @@ elif page == "login_admin":
         admin_key = st.text_input("Admin Key", type="password", placeholder="Enter admin key")
         st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
         if st.button("Access Admin Dashboard →", use_container_width=True, type="primary"):
-            if admin_key.strip():
+            expected_key = os.getenv("ADMIN_KEY", "").strip()
+            if not expected_key:
+                st.error("ADMIN_KEY is not configured.")
+            elif admin_key.strip() == expected_key:
                 st.session_state.page = "portal_admin"
                 st.rerun()
             else:
-                st.error("Please enter the admin key.")
+                st.error("Invalid admin key.")
 
 # ── Portals ────────────────────────────────────────────────────────────────
 elif page == "portal_student":

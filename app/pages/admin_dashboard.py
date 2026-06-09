@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import streamlit as st
 
 import backend.db as db
-from backend.models import NotificationCreate, TicketUpdate
+from backend.escalation import escalate_overdue_tickets
 from components.metrics_bar import render_metrics_bar
 from components.ticket_detail import render_ticket_detail
 from components.ticket_table import render_ticket_table
@@ -18,10 +18,10 @@ def render() -> None:
     _show_metrics(tickets)
     st.markdown("---")
 
-    col_sla, col_refresh, col_space = st.columns([2, 1, 3])
-    with col_sla:
-        if st.button("⚡ Trigger SLA Engine", use_container_width=True, type="primary"):
-            count = _run_escalation_check()
+    col_target, col_refresh, col_space = st.columns([2, 1, 3])
+    with col_target:
+        if st.button("⚡ Trigger Escalation Check", use_container_width=True, type="primary"):
+            count = escalate_overdue_tickets()
             if count:
                 st.success(f"Escalated {count} overdue ticket(s).")
                 st.rerun()
@@ -34,10 +34,13 @@ def render() -> None:
 
     st.markdown("---")
 
-    tab_tickets, tab_analytics = st.tabs(["📋  All Tickets", "📊  Analytics"])
+    tab_tickets, tab_departments, tab_analytics = st.tabs(["📋  All Tickets", "🏢 Departments", "📊  Analytics"])
 
     with tab_tickets:
         _show_all_tickets(tickets)
+
+    with tab_departments:
+        _show_department_manager()
 
     with tab_analytics:
         _show_analytics_charts(tickets)
@@ -50,9 +53,10 @@ def _show_metrics(tickets: list) -> None:
     now = datetime.now(timezone.utc)
     for t in tickets:
         counts[t["status"]] = counts.get(t["status"], 0) + 1
-        if t.get("sla_deadline") and t["status"] not in ("Resolved", "Closed"):
+        target_at = t.get("target_resolution_at") or t.get("sla_deadline")
+        if target_at and t["status"] not in ("Resolved", "Closed"):
             try:
-                dl = datetime.fromisoformat(t["sla_deadline"])
+                dl = datetime.fromisoformat(target_at)
                 if dl.tzinfo is None:
                     dl = dl.replace(tzinfo=timezone.utc)
                 if now > dl:
@@ -72,16 +76,20 @@ def _show_metrics(tickets: list) -> None:
 def _show_all_tickets(tickets: list) -> None:
     st.markdown('<div class="fd-section">Tickets</div>', unsafe_allow_html=True)
 
-    col_s, col_c, col_p = st.columns(3)
+    col_s, col_d, col_p = st.columns(3)
     status_filter = col_s.selectbox(
         "Filter by status",
         ["All", "Open", "Assigned", "In Progress", "Escalated", "Resolved", "Reopened", "Closed"],
         key="admin_status_filter",
     )
-    category_filter = col_c.selectbox(
-        "Filter by category",
-        ["All", "IT & Wi-Fi", "Hostel Maintenance", "Campus Maintenance", "Mess & Food", "Academics", "Other"],
-        key="admin_cat_filter",
+    department_names = sorted({
+        t.get("department_name") or t.get("assigned_dept") or "Unassigned"
+        for t in tickets
+    })
+    department_filter = col_d.selectbox(
+        "Filter by department",
+        ["All"] + department_names,
+        key="admin_dept_filter",
     )
     priority_filter = col_p.selectbox(
         "Filter by priority",
@@ -92,8 +100,11 @@ def _show_all_tickets(tickets: list) -> None:
     filtered = tickets
     if status_filter != "All":
         filtered = [t for t in filtered if t["status"] == status_filter]
-    if category_filter != "All":
-        filtered = [t for t in filtered if t["category"] == category_filter]
+    if department_filter != "All":
+        filtered = [
+            t for t in filtered
+            if (t.get("department_name") or t.get("assigned_dept") or "Unassigned") == department_filter
+        ]
     if priority_filter != "All":
         filtered = [t for t in filtered if t["priority"] == priority_filter]
 
@@ -129,11 +140,12 @@ def _show_analytics_charts(tickets: list) -> None:
             pri_counts[t["priority"]] = pri_counts.get(t["priority"], 0) + 1
         st.bar_chart(pri_counts, color="#7C4DFF")
 
-    st.markdown('<div class="fd-section">By Category</div>', unsafe_allow_html=True)
-    cat_counts: dict[str, int] = {}
+    st.markdown('<div class="fd-section">By Department</div>', unsafe_allow_html=True)
+    dept_counts: dict[str, int] = {}
     for t in tickets:
-        cat_counts[t["category"]] = cat_counts.get(t["category"], 0) + 1
-    st.bar_chart(cat_counts, color="#4CD97B")
+        dept = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
+        dept_counts[dept] = dept_counts.get(dept, 0) + 1
+    st.bar_chart(dept_counts, color="#4CD97B")
 
 
 def _show_ticket_detail(ticket_id: int) -> None:
@@ -145,18 +157,52 @@ def _show_ticket_detail(ticket_id: int) -> None:
     render_ticket_detail(ticket, events, role="admin")
 
 
-def _run_escalation_check() -> int:
-    overdue = db.get_overdue_tickets()
-    count = 0
-    for t in overdue:
-        if t["status"] != "Escalated":
-            db.update_ticket(t["ticket_id"], TicketUpdate(status="Escalated"))
-            db.create_notification(NotificationCreate(
-                ticket_id=t["ticket_id"],
-                recipient=t["telegram_id"],
-                channel="dashboard",
-                message=f"Ticket #{t['ticket_id']} has been escalated due to SLA breach.",
-                status="pending",
-            ))
-            count += 1
-    return count
+def _show_department_manager() -> None:
+    st.markdown('<div class="fd-section">Department Management</div>', unsafe_allow_html=True)
+    departments = db.get_departments(include_inactive=True)
+
+    with st.form("department_create", clear_on_submit=True):
+        st.subheader("Create Department")
+        name = st.text_input("Name", placeholder="General Admin")
+        responsibilities = st.text_area("Responsibilities", height=90)
+        col_contact, col_email = st.columns(2)
+        contact = col_contact.text_input("Contact")
+        escalation_contact = col_email.text_input("Email ID", placeholder="Escalation email")
+        if st.form_submit_button("Create Department", type="primary"):
+            if not name.strip():
+                st.error("Department name is required.")
+            else:
+                db.create_department(
+                    name.strip(),
+                    responsibilities.strip(),
+                    contact.strip(),
+                    escalation_contact.strip(),
+                )
+                st.success("Department created.")
+                st.rerun()
+
+    st.markdown("---")
+    if not departments:
+        st.info("No departments configured yet. Add at least one active department before accepting tickets.")
+        return
+
+    for dept in departments:
+        with st.expander(f"{'Active' if dept.get('active') else 'Inactive'} · {dept['name']}"):
+            with st.form(f"department_edit_{dept['department_id']}"):
+                name = st.text_input("Name", value=dept["name"], key=f"name_{dept['department_id']}")
+                responsibilities = st.text_area("Responsibilities", value=dept.get("responsibilities") or "", height=90, key=f"resp_{dept['department_id']}")
+                col_contact, col_email, col_active = st.columns([2, 2, 1])
+                contact = col_contact.text_input("Contact", value=dept.get("contact") or "", key=f"contact_{dept['department_id']}")
+                escalation_contact = col_email.text_input("Email ID", value=dept.get("escalation_contact") or "", key=f"esc_{dept['department_id']}")
+                active = col_active.checkbox("Active", value=bool(dept.get("active")), key=f"active_{dept['department_id']}")
+                if st.form_submit_button("Save"):
+                    db.update_department(
+                        int(dept["department_id"]),
+                        name.strip(),
+                        responsibilities.strip(),
+                        contact.strip(),
+                        escalation_contact.strip(),
+                        active,
+                    )
+                    st.success("Department updated.")
+                    st.rerun()

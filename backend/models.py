@@ -23,6 +23,9 @@ class UserCreate(BaseModel):
     role: str
     telegram_id: str
     department: Optional[str] = None
+    verified_email: Optional[str] = None
+    google_sub: Optional[str] = None
+    is_verified: bool = False
 
     @field_validator("role")
     @classmethod
@@ -42,19 +45,19 @@ class TicketCreate(BaseModel):
     title: str
     description: str
     raw_message: str
-    category: str
+    category: str = "General"
     location: str = "Unknown"
-    priority: str
+    priority: str = "Medium"
+    department_id: Optional[int] = None
+    routing_reason: Optional[str] = None
+    routing_confidence: Optional[float] = None
+    target_resolution_at: Optional[str] = None
 
     @field_validator("category")
     @classmethod
     def validate_category(cls, value: str) -> str:
         """Ensure *category* is one of the allowed values."""
-        if value not in constants.CATEGORIES:
-            raise ValueError(
-                f"Invalid category '{value}'. Must be one of {constants.CATEGORIES}"
-            )
-        return value
+        return value or "General"
 
     @field_validator("priority")
     @classmethod
@@ -72,6 +75,10 @@ class TicketUpdate(BaseModel):
 
     status: Optional[str] = None
     assigned_dept: Optional[str] = None
+    department_id: Optional[int] = None
+    routing_reason: Optional[str] = None
+    routing_confidence: Optional[float] = None
+    target_resolution_at: Optional[str] = None
     sla_deadline: Optional[str] = None
     resolved_at: Optional[str] = None
     closed_at: Optional[str] = None
@@ -148,7 +155,7 @@ class GraphState(TypedDict):
     """
 
     raw_message: str
-    telegram_id: str | None
+    telegram_id: str
     student_id: str | None
     ticket_id: int | None
     title: str | None
@@ -157,6 +164,10 @@ class GraphState(TypedDict):
     location: str | None
     priority: str | None
     assigned_dept: str | None
+    department_id: int | None
+    routing_reason: str | None
+    routing_confidence: float | None
+    target_resolution_at: str | None
     sla_deadline: str | None
     status: str
     created_at: str | None

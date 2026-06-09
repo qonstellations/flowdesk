@@ -62,11 +62,11 @@ def _fmt_ts(iso: str | None, show_time: bool = True) -> str:
 
 
 def _is_overdue(ticket: dict) -> bool:
-    sla = ticket.get("sla_deadline")
-    if not sla or ticket.get("status") in ("Resolved", "Closed"):
+    target = ticket.get("target_resolution_at") or ticket.get("sla_deadline")
+    if not target or ticket.get("status") in ("Resolved", "Closed"):
         return False
     try:
-        dl = datetime.fromisoformat(sla)
+        dl = datetime.fromisoformat(target)
         if dl.tzinfo is None:
             dl = dl.replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) > dl
@@ -114,7 +114,7 @@ def render_ticket_detail(
     tid      = ticket["ticket_id"]
     status   = ticket.get("status", "Open")
     priority = ticket.get("priority", "Medium")
-    category = ticket.get("category", "Other")
+    department = ticket.get("department_name") or ticket.get("assigned_dept") or "Unassigned"
     sc = _STATUS_COLOR.get(status, "#00E5FF")
     pc = _PRIORITY_COLOR.get(priority, "#00E5FF")
     overdue  = _is_overdue(ticket)
@@ -136,10 +136,10 @@ def render_ticket_detail(
             <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
                 {_badge(status, '#FF4D6D' if overdue else sc)}
                 {_badge(priority, pc)}
-                {_badge(category, '#7C4DFF')}
+                {_badge(department, '#7C4DFF')}
                 {'<span style="color:#FF4D6D;font-size:0.75rem;font-weight:700;'
                   'padding:3px 10px;border-radius:20px;border:1px solid #FF4D6D60;'
-                  'background:#FF4D6D12;">⚠ SLA OVERDUE</span>' if overdue else ''}
+                  'background:#FF4D6D12;">⚠ TARGET OVERDUE</span>' if overdue else ''}
             </div>
         </div>
         """,
@@ -152,15 +152,16 @@ def render_ticket_detail(
 
     left_html  += _meta_cell("Submitted by",  ticket.get("telegram_id") or "—")
     left_html  += _meta_cell("Location",      ticket.get("location") or "Unknown")
-    left_html  += _meta_cell("Category",      category, "#7C4DFF")
-    left_html  += _meta_cell("Assigned dept", ticket.get("assigned_dept") or "Unassigned",
-                              "#4CD97B" if ticket.get("assigned_dept") else "#5A6480")
+    left_html  += _meta_cell("Assigned dept", department,
+                              "#4CD97B" if department != "Unassigned" else "#5A6480")
+    if ticket.get("routing_confidence") is not None:
+        left_html += _meta_cell("Routing confidence", f"{float(ticket['routing_confidence']):.0%}", "#7C4DFF")
 
-    sla_val = _fmt_ts(ticket.get("sla_deadline"))
-    sla_color = "#FF4D6D" if overdue else "#FFD700"
+    target_val = _fmt_ts(ticket.get("target_resolution_at") or ticket.get("sla_deadline"))
+    target_color = "#FF4D6D" if overdue else "#FFD700"
     right_html += _meta_cell("Created",     _fmt_ts(ticket.get("created_at")))
     right_html += _meta_cell("Last updated", _fmt_ts(ticket.get("updated_at")))
-    right_html += _meta_cell("SLA deadline", sla_val, sla_color)
+    right_html += _meta_cell("Target resolution", target_val, target_color)
     if ticket.get("resolved_at"):
         right_html += _meta_cell("Resolved at", _fmt_ts(ticket["resolved_at"]), "#4CD97B")
     if ticket.get("closed_at"):
@@ -191,6 +192,10 @@ def render_ticket_detail(
             """,
             unsafe_allow_html=True,
         )
+
+    if ticket.get("routing_reason"):
+        with st.expander("Routing Reason", expanded=False):
+            st.write(ticket["routing_reason"])
 
     # ── Section 4: Update controls ────────────────────────────────────────
     st.markdown(
@@ -239,7 +244,11 @@ def _admin_controls(ticket: dict, tid: int, current_status: str) -> None:
         key=f"detail_admin_status_{tid}",
     )
 
-    dept_list  = ["— no change —"] + list(constants.DEPARTMENT_ROUTING.values())
+    departments = db.get_departments(include_inactive=False)
+    dept_options = {"— no change —": None} | {
+        dept["name"]: int(dept["department_id"]) for dept in departments
+    }
+    dept_list = list(dept_options.keys())
     new_dept   = col_d.selectbox(
         "Re-assign dept",
         dept_list,
@@ -262,8 +271,8 @@ def _admin_controls(ticket: dict, tid: int, current_status: str) -> None:
             db.update_ticket(tid, update)
             changed = True
 
-        if new_dept != "— no change —" and new_dept != ticket.get("assigned_dept"):
-            db.update_ticket(tid, TicketUpdate(assigned_dept=new_dept))
+        if new_dept != "— no change —" and new_dept != (ticket.get("department_name") or ticket.get("assigned_dept")):
+            db.update_ticket(tid, TicketUpdate(department_id=dept_options[new_dept]))
             changed = True
 
         if changed:

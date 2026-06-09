@@ -18,37 +18,19 @@ _STATUS_COLOR = {
     "Reopened": "#B39DDB",
 }
 
-_CATEGORY_RATIONALE = {
-    "IT & Wi-Fi":          "Complaint contains keywords related to network connectivity, internet access, or device/hardware failure.",
-    "Hostel Maintenance":  "Complaint describes a physical defect or equipment failure inside hostel rooms or hostel common areas.",
-    "Campus Maintenance":  "Complaint relates to campus-wide infrastructure — buildings, grounds, pathways, or shared utilities.",
-    "Mess & Food":         "Complaint concerns the quality, hygiene, timing, or quantity of food served in the dining hall.",
-    "Academics":           "Complaint involves examinations, coursework, faculty conduct, or academic administrative services.",
-    "Other":               "Complaint did not match a primary category; routed to General Admin for manual triage.",
-}
-
 _PRIORITY_RATIONALE = {
-    "Critical": "Affects safety or blocks a large group — SLA window is 4 hours.",
-    "High":     "Significant disruption to daily student life — SLA window is 12 hours.",
-    "Medium":   "Moderate inconvenience with a workaround available — SLA window is 24 hours.",
-    "Low":      "Minor issue with no immediate risk or urgency — SLA window is 72 hours.",
-}
-
-_ROUTING_RATIONALE = {
-    "IT Department":          "Handles all network, hardware, and digital infrastructure requests campus-wide.",
-    "Hostel Maintenance Team":"On-site crew responsible for hostel room fixtures, plumbing, and electrical upkeep.",
-    "Campus Facilities Team": "Manages campus buildings, grounds, and shared utilities outside hostel blocks.",
-    "Mess Committee":         "Oversees dining hall operations, vendor contracts, and food hygiene standards.",
-    "Academic Office":        "Coordinates academic scheduling, faculty matters, and examination logistics.",
-    "General Admin":          "Handles miscellaneous requests not covered by any specialist department.",
+    "Critical": "Affects safety or blocks a large group.",
+    "High":     "Significant disruption to daily student life.",
+    "Medium":   "Moderate inconvenience with a workaround available.",
+    "Low":      "Minor issue with no immediate risk or urgency.",
 }
 
 
-def _is_overdue(sla_deadline: str | None, status: str) -> bool:
-    if not sla_deadline or status in ("Resolved", "Closed"):
+def _is_overdue(target_resolution_at: str | None, status: str) -> bool:
+    if not target_resolution_at or status in ("Resolved", "Closed"):
         return False
     try:
-        dl = datetime.fromisoformat(sla_deadline)
+        dl = datetime.fromisoformat(target_resolution_at)
         if dl.tzinfo is None:
             dl = dl.replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) > dl
@@ -63,21 +45,21 @@ def render_ticket_table(tickets: list) -> None:
 
     for t in sorted(tickets, key=lambda x: x["created_at"], reverse=True):
         status = t.get("status", "Open")
-        overdue = _is_overdue(t.get("sla_deadline"), status)
+        target_at = t.get("target_resolution_at") or t.get("sla_deadline")
+        overdue = _is_overdue(target_at, status)
         sc = _STATUS_COLOR.get(status, "#00E5FF")
         pc = _PRIORITY_COLOR.get(t.get("priority", "Low"), "#00E5FF")
         border = "#FF4D6D" if overdue else sc
 
-        sla_html = ""
-        if t.get("sla_deadline"):
+        target_html = ""
+        if target_at:
             if overdue:
-                sla_html = '<span style="color:#FF4D6D;font-size:0.75rem;font-weight:600;">⚠ SLA OVERDUE</span>'
+                target_html = '<span style="color:#FF4D6D;font-size:0.75rem;font-weight:600;">⚠ TARGET OVERDUE</span>'
             else:
-                dl_str = t["sla_deadline"][:16].replace("T", " ")
-                sla_html = f'<span style="color:#8A94B0;font-size:0.75rem;">SLA: {dl_str}</span>'
+                dl_str = target_at[:16].replace("T", " ")
+                target_html = f'<span style="color:#8A94B0;font-size:0.75rem;">Target: {dl_str}</span>'
 
-        dept = t.get("assigned_dept") or "Unassigned"
-        cat = t.get("category", "")
+        dept = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
         date = t["created_at"][:10] if t.get("created_at") else ""
 
         st.markdown(
@@ -87,8 +69,8 @@ def render_ticket_table(tickets: list) -> None:
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                     <div>
                         <b style="color:#E8ECF5;font-size:0.95rem;">#{t['ticket_id']} {t['title']}</b><br>
-                        <span style="color:#8A94B0;font-size:0.8rem;">{dept} · {cat} · {date}</span><br>
-                        {sla_html}
+                        <span style="color:#8A94B0;font-size:0.8rem;">{dept} · {date}</span><br>
+                        {target_html}
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;margin-left:12px;">
                         <span style="color:{pc};padding:2px 9px;border-radius:20px;
@@ -104,7 +86,7 @@ def render_ticket_table(tickets: list) -> None:
             unsafe_allow_html=True,
         )
 
-        with st.expander("🤖 Why did the AI classify this?"):
+        with st.expander("🤖 Routing and target details"):
             _render_ai_rationale(t)
 
         # Bottom spacer between cards
@@ -112,10 +94,12 @@ def render_ticket_table(tickets: list) -> None:
 
 
 def _render_ai_rationale(t: dict) -> None:
-    cat   = t.get("category", "Other")
     pri   = t.get("priority", "Medium")
-    dept  = t.get("assigned_dept") or ""
+    dept  = t.get("department_name") or t.get("assigned_dept") or ""
     pc    = _PRIORITY_COLOR.get(pri, "#00E5FF")
+    routing_reason = t.get("routing_reason") or "No routing reason recorded."
+    confidence = t.get("routing_confidence")
+    confidence_label = "—" if confidence is None else f"{float(confidence):.0%}"
 
     st.markdown(
         f"""
@@ -124,17 +108,17 @@ def _render_ai_rationale(t: dict) -> None:
                     border-top:1px solid rgba(124,77,255,0.15);">
             <div style="font-size:0.78rem;color:#7C4DFF;font-weight:700;
                         letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">
-                AI Classification Report
+                AI Routing Report
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
                 <div>
                     <div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;
-                                letter-spacing:0.1em;margin-bottom:3px;">Category</div>
+                                letter-spacing:0.1em;margin-bottom:3px;">Department</div>
                     <div style="color:#C8D0E8;font-weight:600;font-size:0.88rem;margin-bottom:4px;">
-                        {cat}
+                        {dept or 'Unassigned'}
                     </div>
                     <div style="color:#6A748A;font-size:0.78rem;line-height:1.4;">
-                        {_CATEGORY_RATIONALE.get(cat, "")}
+                        {routing_reason}
                     </div>
                 </div>
                 <div>
@@ -151,12 +135,9 @@ def _render_ai_rationale(t: dict) -> None:
             {"" if not dept else f'''
             <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">
                 <div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;
-                            letter-spacing:0.1em;margin-bottom:3px;">Routed to</div>
+                            letter-spacing:0.1em;margin-bottom:3px;">Routing confidence</div>
                 <div style="color:#C8D0E8;font-weight:600;font-size:0.88rem;margin-bottom:4px;">
-                    {dept}
-                </div>
-                <div style="color:#6A748A;font-size:0.78rem;line-height:1.4;">
-                    {_ROUTING_RATIONALE.get(dept, "")}
+                    {confidence_label}
                 </div>
             </div>'''}
         </div>

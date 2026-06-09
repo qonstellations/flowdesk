@@ -1,8 +1,8 @@
 import streamlit as st
+from streamlit.errors import StreamlitAuthError
 
 import backend.db as db
-from backend.constants import CATEGORIES, PRIORITIES
-from backend.models import TicketCreate, UserCreate
+from backend.auth import is_allowed_email
 from components.ticket_detail import render_ticket_detail
 from components.ticket_table import render_ticket_table
 
@@ -10,45 +10,56 @@ from components.ticket_table import render_ticket_table
 def render() -> None:
     st.markdown('<div class="fd-section">Student Portal</div>', unsafe_allow_html=True)
 
-    col_id, col_btn = st.columns([3, 1])
-    with col_id:
-        telegram_id = st.text_input(
-            "Your Telegram ID",
-            placeholder="Enter your Telegram ID to load tickets  (e.g. 123456789)",
-            key="student_tid",
-            label_visibility="collapsed",
-        )
-    with col_btn:
-        search = st.button("🔍 Load Tickets", use_container_width=True, type="primary")
+    user = getattr(st, "user", None)
+    is_logged_in = bool(user and getattr(user, "is_logged_in", False))
 
-    if not telegram_id:
-        st.markdown("""
-        <div style="background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.12);
-                    border-radius:14px;padding:20px 24px;margin:16px 0;color:#6A748A;
-                    text-align:center;font-size:0.9rem;">
-            Enter your Telegram ID above to view your tickets, or use the
-            <b style="color:#8A94B8;">Submit Complaint</b> tab to file a new issue.
-        </div>
-        """, unsafe_allow_html=True)
-        tab_form, = st.tabs(["📝 Submit Complaint"])
-        with tab_form:
-            _show_complaint_form(telegram_id="")
+    if not is_logged_in:
+        render_login_button()
         return
 
-    tab_my, tab_new = st.tabs(["📋 My Tickets", "📝 Submit Complaint"])
+    email = _user_value(user, "email")
+    if not email or not is_allowed_email(email):
+        st.error("Use a verified Google account to view tickets.")
+        if hasattr(st, "logout"):
+            st.button("Sign out", on_click=st.logout)
+        return
 
-    with tab_my:
-        _show_ticket_list(telegram_id)
+    verified_user = db.get_user_by_email(email)
+    if not verified_user:
+        verified_user = db.create_pending_google_user(
+            email=email,
+            name=_user_value(user, "name") or email,
+            google_sub=_user_value(user, "sub"),
+        )
+        _show_link_instruction_once()
 
-    with tab_new:
-        _show_complaint_form(telegram_id)
+    col_email, col_logout = st.columns([3, 1])
+    col_email.caption(f"Signed in as {email}")
+    if hasattr(st, "logout"):
+        col_logout.button("Sign out", on_click=st.logout, use_container_width=True)
+
+    if _is_pending_google_user(verified_user):
+        st.info("Talk to @flowdeskai_bot on Telegram and send /link to connect your Telegram ID to this Google account.")
+
+    _show_ticket_list(email)
 
 
-def _show_ticket_list(telegram_id: str) -> None:
-    tickets = db.get_tickets_by_telegram_id(telegram_id)
+def render_login_button() -> None:
+    st.caption("Sign in with Google to view tickets for your linked FlowDesk account.")
+    login_error = _streamlit_login_error()
+    if login_error:
+        st.error(login_error)
+    elif hasattr(st, "login"):
+        st.button("Log in with Google", on_click=st.login, type="primary", use_container_width=True)
+    else:
+        st.error("This Streamlit version does not support st.login. Upgrade Streamlit to use Google login.")
+
+
+def _show_ticket_list(email: str) -> None:
+    tickets = db.get_tickets_by_verified_email(email)
 
     if not tickets:
-        st.info("No tickets found for this Telegram ID. Use the Submit Complaint tab to file one.")
+        st.info("No tickets found for this verified account. Use Telegram /ticket to file one.")
         return
 
     st.caption(f"{len(tickets)} ticket(s) on record")
@@ -71,45 +82,40 @@ def _show_ticket_detail(ticket_id: int) -> None:
     render_ticket_detail(ticket, events, role="student")
 
 
-def _show_complaint_form(telegram_id: str) -> None:
-    st.markdown('<div class="fd-section">Submit a Complaint</div>', unsafe_allow_html=True)
-    st.caption("Use this form when the Telegram bot is unavailable.")
+def _user_value(user: object, key: str) -> str:
+    value = getattr(user, key, "")
+    if value:
+        return str(value)
+    getter = getattr(user, "get", None)
+    if callable(getter):
+        return str(getter(key, "") or "")
+    return ""
 
-    with st.form("complaint_form", clear_on_submit=True):
-        col_n, col_t = st.columns(2)
-        name = col_n.text_input("Your Name", placeholder="e.g. Rahul Sharma")
-        tid = col_t.text_input(
-            "Telegram ID",
-            value=telegram_id,
-            placeholder="e.g. 123456789",
-        )
 
-        title = st.text_input("Issue Title", placeholder="One-line summary of the problem")
-        description = st.text_area("Describe the Issue", placeholder="Provide as much detail as possible — location, time, what happened.", height=110)
+def _is_pending_google_user(user: dict) -> bool:
+    telegram_id = str(user.get("telegram_id") or "")
+    return telegram_id.startswith("google:")
 
-        col_c, col_l, col_p = st.columns(3)
-        category = col_c.selectbox("Category", list(CATEGORIES))
-        location = col_l.text_input("Location", placeholder="e.g. Block B, Room 204")
-        priority = col_p.selectbox("Severity", list(PRIORITIES))
 
-        submitted = st.form_submit_button("🚀 Submit Complaint", type="primary", use_container_width=True)
+def _show_link_instruction_once() -> None:
+    key = "flowdesk_pending_google_toast_shown"
+    if st.session_state.get(key):
+        return
+    st.session_state[key] = True
+    st.toast("Account created. Talk to @flowdeskai_bot on Telegram and use /link to connect Telegram.", icon="ℹ️")
 
-    if submitted:
-        if not all([name.strip(), tid.strip(), title.strip(), description.strip()]):
-            st.error("Please fill in Name, Telegram ID, Title, and Description.")
-            return
 
-        user = db.get_user_by_telegram_id(tid.strip())
-        if not user:
-            db.create_user(UserCreate(name=name.strip(), role="student", telegram_id=tid.strip()))
+def _streamlit_login_error() -> str:
+    try:
+        from streamlit.auth_util import is_authlib_installed, validate_auth_credentials
+    except Exception:
+        return "This Streamlit version does not expose auth helpers. Upgrade Streamlit to use Google login."
 
-        ticket_id = db.create_ticket(TicketCreate(
-            telegram_id=tid.strip(),
-            title=title.strip(),
-            description=description.strip(),
-            raw_message=description.strip(),
-            category=category,
-            location=location.strip() or "Unknown",
-            priority=priority,
-        ))
-        st.success(f"✅ Complaint submitted! Your ticket ID is **#{ticket_id}**. Track it under **My Tickets**.")
+    if not is_authlib_installed():
+        return "Authentication dependency missing. Run `uv sync` to install `streamlit[auth]` and Authlib."
+
+    try:
+        validate_auth_credentials("default")
+    except StreamlitAuthError as exc:
+        return str(exc)
+    return ""

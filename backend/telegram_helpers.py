@@ -33,7 +33,7 @@ def _get_bot_token() -> str:
     return token
 
 
-def send_message(chat_id: str, text: str, parse_mode: str = "Markdown") -> bool:
+def send_message(chat_id: str, text: str, parse_mode: str | None = "Markdown") -> bool:
     """Send a text message to a Telegram chat.
 
     Uses the ``TELEGRAM_BOT_TOKEN`` environment variable to authenticate
@@ -60,8 +60,9 @@ def send_message(chat_id: str, text: str, parse_mode: str = "Markdown") -> bool:
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": parse_mode,
     }
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
 
     try:
         response = httpx.post(url, json=payload, timeout=10.0)
@@ -85,9 +86,11 @@ def send_message(chat_id: str, text: str, parse_mode: str = "Markdown") -> bool:
 
 def format_ticket_reply(
     ticket_id: int,
-    category: str,
-    priority: str,
-    sla_deadline: str,
+    department: str | None = None,
+    priority: str = "Medium",
+    target_resolution_at: str = "TBD",
+    category: str | None = None,
+    sla_deadline: str | None = None,
 ) -> str:
     """Format a human-readable confirmation message for a new ticket.
 
@@ -99,8 +102,8 @@ def format_ticket_reply(
         The classified complaint category.
     priority:
         The assigned priority level.
-    sla_deadline:
-        ISO-8601 datetime string for the SLA deadline.
+    target_resolution_at:
+        ISO-8601 datetime string for the target resolution.
 
     Returns
     -------
@@ -116,13 +119,16 @@ def format_ticket_reply(
     }
     emoji = priority_emoji.get(priority, "⚪")
 
+    routed_to = department or category or "Assigned team"
+    target = target_resolution_at or sla_deadline or "TBD"
+
     return (
         f"✅ *Ticket Created Successfully!*\n"
         f"\n"
         f"🎫 *Ticket ID:* `#{ticket_id}`\n"
-        f"📂 *Category:* {category}\n"
+        f"🏢 *Assigned Team:* {routed_to}\n"
         f"{emoji} *Priority:* {priority}\n"
-        f"⏰ *SLA Deadline:* {sla_deadline}\n"
+        f"⏰ *Target Resolution:* {target}\n"
         f"\n"
         f"Your complaint has been received and is being processed. "
         f"You will be notified when there are updates.\n"

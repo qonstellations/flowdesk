@@ -1,336 +1,111 @@
-"""LangGraph agentic workflow for FlowDesk ticket processing.
-
-Defines the node functions that compose the complaint-handling pipeline
-and exposes ``build_graph`` / ``run_workflow`` as the public API.
-"""
+"""Ticket processing workflow for verified, complete complaints."""
 
 from __future__ import annotations
 
-from langgraph.graph import END, StateGraph
-from langgraph.graph.state import CompiledStateGraph
-
-from backend import classifier, db, router, sla
-from backend.models import GraphState
-
-from backend.llm import call_gemini
-
-# ── Graph nodes ────────────────────────────────────────────────────────
+from backend import db, router, sla
+from backend.llm import call_llm
+from backend.llm_schemas import INTAKE_SCHEMA, IntakeResult
+from backend.models import EventCreate, GraphState, NotificationCreate, TicketCreate
+from backend.telegram_helpers import format_ticket_reply
 
 
-def intake_node(state: GraphState) -> GraphState:
-    """Parse and normalise the incoming raw message.
+def run_workflow(raw_message: str, telegram_id: str) -> GraphState:
+    """Create a ticket from a verified and complete Telegram complaint."""
+    if not telegram_id:
+        raise ValueError("telegram_id is required to create a ticket.")
 
-    Responsibilities:
-    - Extract or look up the student from ``state["telegram_id"]``
-    - Populate ``title``, ``description``, ``student_id``
-    - Set initial ``status`` to ``"Open"``
-    """
-    raw_message = state.get("raw_message", "")
-    telegram_id = state.get("telegram_id")
-    
-    # 1. Lookup student from database for ticket attribution.
-    student_id = None
-    if telegram_id:
-        student = db.get_user_by_telegram_id(telegram_id)
-        if student:
-            student_id = student.get("name")
-            
-    # 2. Call LLM to extract title, description, location
-    prompt = f"""You are the Intake Agent for FlowDesk, an issue resolution platform.
-Extract and normalize details from the student's raw complaint.
-Do not reject unclear complaints.
-If location is not mentioned, return "Unknown" for location.
+    user = db.get_user_by_telegram_id(telegram_id)
+    if not user or not user.get("is_verified"):
+        raise PermissionError("Telegram user must be linked to a verified Google account before creating tickets.")
 
-Complaint:
-"{raw_message}"
-"""
-    
-    schema = {
-        "type": "OBJECT",
-        "properties": {
-            "title": {
-                "type": "STRING",
-                "description": "A clean, concise 4-7 word title summarizing the complaint."
-            },
-            "description": {
-                "type": "STRING",
-                "description": "A sanitized, grammatically correct and clear description of the problem."
-            },
-            "location": {
-                "type": "STRING",
-                "description": "The room, hostel, building, or specific area mentioned, or 'Unknown'."
-            }
-        },
-        "required": ["title", "description", "location"]
-    }
-    
-    extracted = call_gemini(prompt, response_schema=schema)
-    
-    title = extracted.get("title", "Campus Issue Report")
-    description = extracted.get("description", raw_message)
-    location = extracted.get("location", "Unknown")
-    
-    # Update notes
-    agent_notes = list(state.get("agent_notes") or [])
-    agent_notes.append("Ticket ingested and processed by Intake Agent.")
-    
-    # Update state (keys are additive)
-    new_state = dict(state)
-    new_state.update({
-        "title": title,
-        "description": description,
-        "location": location,
-        "student_id": student_id,
-        "status": "Open",
-        "agent_notes": agent_notes
-    })
-    
-    return new_state
+    intake = _extract_intake(raw_message)
+    routing = router.route_ticket(intake.description, intake.title)
+    department = db.get_department(routing.department_id)
+    created_at = db.utc_now()
+    target = sla.estimate_target_resolution(intake.description, department, created_at)
+    target_at = sla.target_timestamp(created_at, target.target_hours)
 
-
-
-def classification_node(state: GraphState) -> GraphState:
-    """Classify the complaint using the LLM classifier.
-
-    Populates ``category`` and ``priority`` in the state.
-    """
-    description = state.get("description") or state.get("raw_message", "")
-    
-    result = classifier.classify_complaint(description)
-    
-    category = result.get("category", "Other")
-    priority = result.get("priority", "Medium")
-    
-    agent_notes = list(state.get("agent_notes") or [])
-    agent_notes.append(f"Ticket classified as {category} with {priority} priority.")
-    
-    new_state = dict(state)
-    new_state.update({
-        "category": category,
-        "priority": priority,
-        "agent_notes": agent_notes
-    })
-    
-    return new_state
-
-
-
-def routing_node(state: GraphState) -> GraphState:
-    """Route the ticket to the appropriate department.
-
-    Populates ``assigned_dept`` in the state.
-    """
-    category = state.get("category", "Other")
-    
-    assigned_dept = router.route_ticket(category)
-    
-    agent_notes = list(state.get("agent_notes") or [])
-    agent_notes.append(f"Ticket routed to {assigned_dept}.")
-    
-    new_state = dict(state)
-    new_state.update({
-        "assigned_dept": assigned_dept,
-        "agent_notes": agent_notes
-    })
-    
-    return new_state
-
-
-
-def sla_node(state: GraphState) -> GraphState:
-    """Calculate the SLA deadline for the ticket.
-
-    Populates ``sla_deadline`` in the state.
-    """
-    from datetime import datetime
-    
-    priority = state.get("priority", "Medium")
-    created_at = state.get("created_at")
-    if not created_at:
-        # Generate current ISO timestamp
-        created_at = datetime.now().isoformat()
-        
-    sla_deadline = sla.calculate_sla_deadline(priority, created_at)
-    
-    agent_notes = list(state.get("agent_notes") or [])
-    agent_notes.append(f"SLA deadline set to {sla_deadline} based on {priority} priority.")
-    
-    new_state = dict(state)
-    new_state.update({
-        "created_at": created_at,
-        "sla_deadline": sla_deadline,
-        "agent_notes": agent_notes
-    })
-    
-    return new_state
-
-
-
-def work_order_node(state: GraphState) -> GraphState:
-    """Persist the fully-enriched ticket to the database.
-
-    Creates the ticket record, updates ``ticket_id`` in state, and
-    queues a confirmation notification.
-    """
-    from backend.models import (
-        EventCreate,
-        NotificationCreate,
-        TicketCreate,
-        TicketUpdate,
-    )
-    from backend import telegram_helpers
-
-    # 1. Create the ticket record with core fields
-    ticket_data = TicketCreate(
-        telegram_id=state.get("telegram_id") or "Unknown",
-        title=state.get("title") or "Untitled Ticket",
-        description=state.get("description") or "",
-        raw_message=state.get("raw_message") or "",
-        category=state.get("category") or "Other",
-        location=state.get("location") or "Unknown",
-        priority=state.get("priority") or "Medium"
-    )
-    ticket_id = db.create_ticket(ticket_data)
-
-    # 2. Set additional fields (status, assigned_dept, sla_deadline) via TicketUpdate
-    update_data = TicketUpdate(
-        status=state.get("status") or "Open",
-        assigned_dept=state.get("assigned_dept"),
-        sla_deadline=state.get("sla_deadline")
-    )
-    db.update_ticket(ticket_id, update_data)
-
-    # 3. Log initial system events for the ticket
-    db.create_event(EventCreate(
-        ticket_id=ticket_id,
-        actor_type="student",
-        actor_name=state.get("student_id") or "student",
-        action="TICKET_CREATED",
-        details="Ticket submitted via Telegram"
+    ticket_id = db.create_ticket(TicketCreate(
+        telegram_id=telegram_id,
+        title=intake.title,
+        description=intake.description,
+        raw_message=raw_message,
+        category=routing.department_name,
+        location=intake.location or "Unknown",
+        priority=target.urgency,
+        department_id=routing.department_id,
+        routing_reason=routing.reason,
+        routing_confidence=routing.confidence,
+        target_resolution_at=target_at,
     ))
-    db.create_event(EventCreate(
-        ticket_id=ticket_id,
-        actor_type="system",
-        actor_name="agent",
-        action="CLASSIFIED",
-        details=f"Category: {state.get('category')}, Priority: {state.get('priority')}"
-    ))
+
     db.create_event(EventCreate(
         ticket_id=ticket_id,
         actor_type="system",
         actor_name="agent",
         action="ROUTED",
-        details=f"Assigned to {state.get('assigned_dept')}"
+        details=f"Assigned to {routing.department_name}. Reason: {routing.reason}",
     ))
     db.create_event(EventCreate(
         ticket_id=ticket_id,
         actor_type="system",
         actor_name="agent",
-        action="SLA_ASSIGNED",
-        details=f"Deadline set to {state.get('sla_deadline')}"
+        action="TARGET_RESOLUTION_SET",
+        details=f"{target.urgency} urgency, {target.target_hours} hour target. {target.explanation}",
     ))
 
-    # 4. Generate user-facing reply and queue notification
-    reply_msg = telegram_helpers.format_ticket_reply(
+    reply = format_ticket_reply(
         ticket_id=ticket_id,
-        category=state.get("category") or "Other",
-        priority=state.get("priority") or "Medium",
-        sla_deadline=state.get("sla_deadline") or "N/A"
+        department=routing.department_name,
+        priority=target.urgency,
+        target_resolution_at=target_at,
     )
     db.create_notification(NotificationCreate(
         ticket_id=ticket_id,
-        recipient=state.get("telegram_id") or "Unknown",
+        recipient=telegram_id,
         channel="telegram",
-        message=reply_msg,
-        status="pending"
+        message=reply,
+        status="pending",
     ))
 
-    agent_notes = list(state.get("agent_notes") or [])
-    agent_notes.append(f"Ticket saved with ID {ticket_id} and confirmation notification queued.")
-
-    new_state = dict(state)
-    new_state.update({
-        "ticket_id": ticket_id,
-        "agent_notes": agent_notes
-    })
-    return new_state
-
-
-
-# ── Graph construction ─────────────────────────────────────────────────
-
-
-def build_graph() -> CompiledStateGraph:
-    """Construct and compile the LangGraph state-machine.
-
-    Node order::
-
-        intake → classification → routing → sla → work_order → END
-
-    Returns
-    -------
-    CompiledStateGraph
-        The compiled, ready-to-invoke LangGraph graph.
-    """
-    workflow = StateGraph(GraphState)
-
-    # 1. Add all nodes
-    workflow.add_node("intake", intake_node)
-    workflow.add_node("classification", classification_node)
-    workflow.add_node("routing", routing_node)
-    workflow.add_node("sla", sla_node)
-    workflow.add_node("work_order", work_order_node)
-
-    # 2. Define connectivity (edges)
-    workflow.set_entry_point("intake")
-    workflow.add_edge("intake", "classification")
-    workflow.add_edge("classification", "routing")
-    workflow.add_edge("routing", "sla")
-    workflow.add_edge("sla", "work_order")
-    workflow.add_edge("work_order", END)
-
-    # 3. Compile
-    return workflow.compile()
+    return GraphState(
+        raw_message=raw_message,
+        telegram_id=telegram_id,
+        student_id=user.get("verified_email") or user.get("name"),
+        ticket_id=ticket_id,
+        title=intake.title,
+        description=intake.description,
+        category=routing.department_name,
+        location=intake.location,
+        priority=target.urgency,
+        assigned_dept=routing.department_name,
+        department_id=routing.department_id,
+        routing_reason=routing.reason,
+        routing_confidence=routing.confidence,
+        target_resolution_at=target_at,
+        sla_deadline=target_at,
+        status="Open",
+        created_at=created_at,
+        agent_notes=[
+            "Complaint normalized by Intake Agent.",
+            f"Ticket routed to {routing.department_name}.",
+            f"Target resolution set to {target_at}.",
+            f"Ticket saved with ID {ticket_id}.",
+        ],
+    )
 
 
-# ── Convenience runner ─────────────────────────────────────────────────
+def _extract_intake(raw_message: str) -> IntakeResult:
+    prompt = f"""Extract and normalize a complete university campus complaint.
+Return a concise title, clear description, and location. Use "Unknown" only if no location
+is required or no location is present.
 
-
-def run_workflow(
-    raw_message: str,
-    telegram_id: str | None = None,
-) -> GraphState:
-    """Run the full ticket-processing pipeline end-to-end.
-
-    Parameters
-    ----------
-    raw_message:
-        The user's raw complaint text.
-    telegram_id:
-        Optional Telegram user ID for attribution.
-
-    Returns
-    -------
-    GraphState
-        The final state dict after all nodes have executed.
-    """
-    initial_state: GraphState = {
-        "raw_message": raw_message,
-        "telegram_id": telegram_id,
-        "student_id": None,
-        "ticket_id": None,
-        "title": None,
-        "description": "",
-        "category": None,
-        "location": "Unknown",
-        "priority": None,
-        "assigned_dept": None,
-        "sla_deadline": None,
-        "status": "Open",
-        "created_at": None,
-        "agent_notes": []
-    }
-
-    app = build_graph()
-    final_state = app.invoke(initial_state)
-    return final_state
+Complaint:
+{raw_message}
+"""
+    result = IntakeResult.model_validate(call_llm(prompt, INTAKE_SCHEMA))
+    return IntakeResult(
+        title=result.title.strip() or "Campus Issue Report",
+        description=result.description.strip() or raw_message,
+        location=result.location.strip() or "Unknown",
+    )

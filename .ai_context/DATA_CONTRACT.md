@@ -114,16 +114,10 @@ Fields:
 * department_id: INTEGER PRIMARY KEY AUTOINCREMENT
 * name: TEXT UNIQUE
 * category: TEXT
-* escalation_contact: TEXT OPTIONAL
-
-Seed data (must be inserted on DB init):
-
-* IT Department → IT & Wi-Fi
-* Hostel Maintenance Team → Hostel Maintenance
-* Campus Facilities Team → Campus Maintenance
-* Mess Committee → Mess & Food
-* Academic Office → Academics
-* General Admin → Other
+* responsibilities: TEXT
+* contact: TEXT
+* escalation_contact: TEXT OPTIONAL (department email ID)
+* active: INTEGER BOOLEAN
 
 ### notifications
 

@@ -36,14 +36,12 @@ PRIORITIES: tuple[str, ...] = (
 # ── User roles ─────────────────────────────────────────────────────────
 ROLES: tuple[str, ...] = (
     "student",
-    "staff",
     "admin",
 )
 
 # ── Actor types for audit-trail events ─────────────────────────────────
 ACTOR_TYPES: tuple[str, ...] = (
     "student",
-    "staff",
     "admin",
     "agent",
     "system",

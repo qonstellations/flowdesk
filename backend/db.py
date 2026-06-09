@@ -1,36 +1,22 @@
-"""
-SQLite database access layer for FlowDesk.
-
-Provides connection management, table initialisation, and CRUD helpers
-for users, tickets, events, and notifications.
-"""
+"""SQLite database access layer for FlowDesk."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from backend import constants
-from backend.models import (
-    EventCreate,
-    NotificationCreate,
-    TicketCreate,
-    TicketUpdate,
-    UserCreate,
-)
+from backend.models import EventCreate, NotificationCreate, TicketCreate, TicketUpdate, UserCreate
 
 
-# ── Connection management ──────────────────────────────────────────────
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def get_connection() -> sqlite3.Connection:
-    """Return a SQLite connection to the configured database.
-
-    Uses ``constants.DB_PATH`` and ensures the parent directory exists.
-    The connection is configured with ``row_factory = sqlite3.Row`` so
-    that rows behave like dicts.
-    """
     db_path = Path(constants.DB_PATH)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
@@ -39,16 +25,9 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-# ── Schema bootstrap ──────────────────────────────────────────────────
-
-
 def init_db() -> None:
-    """Create all tables (if they don't exist) and seed departments.
-
-    Tables: users, tickets, events, notifications, departments.
-    """
+    """Create and migrate all MVP tables idempotently."""
     with get_connection() as conn:
-        # 1. Users table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,10 +35,39 @@ def init_db() -> None:
                 role TEXT NOT NULL,
                 telegram_id TEXT UNIQUE NOT NULL,
                 department TEXT,
+                verified_email TEXT,
+                google_sub TEXT,
+                is_verified INTEGER NOT NULL DEFAULT 0,
+                linked_at TEXT,
                 created_at TEXT NOT NULL
             )
         """)
-        # 2. Tickets table
+        _add_column(conn, "users", "verified_email", "TEXT")
+        _add_column(conn, "users", "google_sub", "TEXT")
+        _add_column(conn, "users", "is_verified", "INTEGER NOT NULL DEFAULT 0")
+        _add_column(conn, "users", "linked_at", "TEXT")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS departments (
+                department_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                category TEXT NOT NULL DEFAULT 'General',
+                responsibilities TEXT NOT NULL DEFAULT '',
+                contact TEXT NOT NULL DEFAULT '',
+                escalation_contact TEXT,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
+        _add_column(conn, "departments", "responsibilities", "TEXT NOT NULL DEFAULT ''")
+        _add_column(conn, "departments", "contact", "TEXT NOT NULL DEFAULT ''")
+        _add_column(conn, "departments", "active", "INTEGER NOT NULL DEFAULT 1")
+        _add_column(conn, "departments", "created_at", "TEXT")
+        _add_column(conn, "departments", "updated_at", "TEXT")
+        _drop_column_if_exists(conn, "departments", "description")
+        _drop_column_if_exists(conn, "departments", "default_target_hours")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tickets (
                 ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,20 +75,55 @@ def init_db() -> None:
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 raw_message TEXT NOT NULL,
-                category TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'General',
                 location TEXT NOT NULL DEFAULT 'Unknown',
                 priority TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'Open',
                 assigned_dept TEXT,
+                department_id INTEGER,
+                routing_reason TEXT,
+                routing_confidence REAL,
+                target_resolution_at TEXT,
                 sla_deadline TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 resolved_at TEXT,
                 closed_at TEXT,
-                FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
+                FOREIGN KEY (telegram_id) REFERENCES users(telegram_id),
+                FOREIGN KEY (department_id) REFERENCES departments(department_id)
             )
         """)
-        # 3. Events table (Audit Trail)
+        _add_column(conn, "tickets", "department_id", "INTEGER")
+        _add_column(conn, "tickets", "routing_reason", "TEXT")
+        _add_column(conn, "tickets", "routing_confidence", "REAL")
+        _add_column(conn, "tickets", "target_resolution_at", "TEXT")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS complaint_drafts (
+                draft_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id TEXT NOT NULL UNIQUE,
+                chat_id TEXT NOT NULL,
+                draft_complaint TEXT NOT NULL,
+                missing_fields TEXT NOT NULL DEFAULT '[]',
+                asked_questions TEXT NOT NULL DEFAULT '[]',
+                answers TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS link_tokens (
+                token TEXT PRIMARY KEY,
+                telegram_id TEXT NOT NULL,
+                chat_id TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_at TEXT
+            )
+        """)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS events (
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,16 +136,6 @@ def init_db() -> None:
                 FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
             )
         """)
-        # 4. Departments table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS departments (
-                department_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                category TEXT NOT NULL,
-                escalation_contact TEXT
-            )
-        """)
-        # 5. Notifications table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS notifications (
                 notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,75 +148,145 @@ def init_db() -> None:
                 FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
             )
         """)
-
-        # Seed departments
-        departments_seed = [
-            ("IT Department", "IT & Wi-Fi"),
-            ("Hostel Maintenance Team", "Hostel Maintenance"),
-            ("Campus Facilities Team", "Campus Maintenance"),
-            ("Mess Committee", "Mess & Food"),
-            ("Academic Office", "Academics"),
-            ("General Admin", "Other")
-        ]
-        for name, category in departments_seed:
-            conn.execute("""
-                INSERT INTO departments (name, category)
-                VALUES (?, ?)
-                ON CONFLICT(name) DO NOTHING
-            """, (name, category))
         conn.commit()
 
 
-# ── Users ──────────────────────────────────────────────────────────────
+def _add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _drop_column_if_exists(conn: sqlite3.Connection, table: str, column: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        return
+    try:
+        conn.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+    except sqlite3.OperationalError:
+        # Older SQLite versions cannot drop columns. Runtime code no longer reads or writes them.
+        pass
 
 
 def create_user(user: UserCreate) -> int:
-    """Insert a new user and return the generated user ID."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO users (name, role, telegram_id, department, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user.name, user.role, user.telegram_id, user.department, now))
+            INSERT INTO users (
+                name, role, telegram_id, department, verified_email, google_sub,
+                is_verified, linked_at, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user.name,
+            user.role,
+            user.telegram_id,
+            user.department,
+            user.verified_email,
+            user.google_sub,
+            1 if user.is_verified else 0,
+            now if user.is_verified else None,
+            now,
+        ))
         conn.commit()
-        return cursor.lastrowid
+        return int(cursor.lastrowid)
+
+
+def upsert_telegram_user(telegram_id: str, name: str, role: str = "student") -> dict:
+    existing = get_user_by_telegram_id(telegram_id)
+    if existing:
+        return existing
+    create_user(UserCreate(name=name or "Student", role=role, telegram_id=telegram_id))
+    return get_user_by_telegram_id(telegram_id) or {}
 
 
 def get_user_by_telegram_id(telegram_id: str) -> dict | None:
-    """Look up a user by their Telegram ID.
-
-    Returns a dict of user fields, or ``None`` if not found.
-    """
     with get_connection() as conn:
-        row = conn.execute("""
-            SELECT user_id, name, role, telegram_id, department, created_at
-            FROM users
-            WHERE telegram_id = ?
-        """, (telegram_id,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone()
         return dict(row) if row else None
 
 
-# ── Tickets ────────────────────────────────────────────────────────────
+def get_user_by_email(email: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM users WHERE lower(verified_email) = lower(?)", (email,)).fetchone()
+        return dict(row) if row else None
+
+
+def create_pending_google_user(email: str, name: str = "", google_sub: str = "") -> dict:
+    existing = get_user_by_email(email)
+    if existing:
+        return existing
+
+    placeholder_telegram_id = f"google:{email.strip().lower()}"
+    create_user(UserCreate(
+        name=name or email,
+        role="student",
+        telegram_id=placeholder_telegram_id,
+        verified_email=email.strip().lower(),
+        google_sub=google_sub,
+        is_verified=True,
+    ))
+    return get_user_by_email(email) or {}
+
+
+def link_verified_user(telegram_id: str, name: str, email: str, google_sub: str) -> None:
+    now = utc_now()
+    with get_connection() as conn:
+        email_row = conn.execute(
+            "SELECT * FROM users WHERE lower(verified_email) = lower(?)",
+            (email,),
+        ).fetchone()
+        if email_row and email_row["telegram_id"] != telegram_id:
+            conn.execute("""
+                DELETE FROM users
+                WHERE telegram_id = ?
+                  AND verified_email IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM tickets WHERE tickets.telegram_id = users.telegram_id
+                  )
+            """, (telegram_id,))
+            conn.execute("""
+                UPDATE users
+                SET name = ?, role = 'student', telegram_id = ?, verified_email = ?,
+                    google_sub = ?, is_verified = 1, linked_at = ?
+                WHERE user_id = ?
+            """, (name or email, telegram_id, email, google_sub, now, email_row["user_id"]))
+        else:
+            conn.execute("""
+                INSERT INTO users (
+                    name, role, telegram_id, verified_email, google_sub, is_verified,
+                    linked_at, created_at
+                )
+                VALUES (?, 'student', ?, ?, ?, 1, ?, ?)
+                ON CONFLICT(telegram_id) DO UPDATE SET
+                    name = excluded.name,
+                    role = 'student',
+                    verified_email = excluded.verified_email,
+                    google_sub = excluded.google_sub,
+                    is_verified = 1,
+                    linked_at = excluded.linked_at
+            """, (name or email, telegram_id, email, google_sub, now, now))
+        conn.commit()
 
 
 def create_ticket(ticket: TicketCreate) -> int:
-    """Insert a new ticket and return the generated ticket ID."""
-    now = datetime.now(timezone.utc).isoformat()
-    
-    # Try to find user to attribute the creation audit event actor
+    now = utc_now()
     user = get_user_by_telegram_id(ticket.telegram_id)
     actor_name = user["name"] if user else "Unknown User"
     actor_type = user["role"] if user else "student"
+    assigned_dept = get_department_name(ticket.department_id) if ticket.department_id else None
+    deadline = ticket.target_resolution_at
 
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO tickets (
-                telegram_id, title, description, raw_message, category,
-                location, priority, status, created_at, updated_at
+                telegram_id, title, description, raw_message, category, location,
+                priority, status, assigned_dept, department_id, routing_reason,
+                routing_confidence, target_resolution_at, sla_deadline, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             ticket.telegram_id,
             ticket.title,
@@ -192,218 +295,173 @@ def create_ticket(ticket: TicketCreate) -> int:
             ticket.category,
             ticket.location,
             ticket.priority,
-            "Open",
+            assigned_dept,
+            ticket.department_id,
+            ticket.routing_reason,
+            ticket.routing_confidence,
+            ticket.target_resolution_at,
+            deadline,
             now,
-            now
+            now,
         ))
-        ticket_id = cursor.lastrowid
-
-        # Insert audit trail for ticket creation
+        ticket_id = int(cursor.lastrowid)
         cursor.execute("""
             INSERT INTO events (ticket_id, actor_type, actor_name, action, details, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            ticket_id,
-            actor_type,
-            actor_name,
-            "TICKET_CREATED",
-            f"Ticket created: {ticket.title}",
-            now
-        ))
-        
+            VALUES (?, ?, ?, 'TICKET_CREATED', ?, ?)
+        """, (ticket_id, actor_type, actor_name, f"Ticket created: {ticket.title}", now))
         conn.commit()
         return ticket_id
 
 
 def get_ticket(ticket_id: int) -> dict | None:
-    """Fetch a single ticket by ID.
-
-    Returns a dict of ticket fields, or ``None`` if not found.
-    """
     with get_connection() as conn:
         row = conn.execute("""
-            SELECT * FROM tickets WHERE ticket_id = ?
+            SELECT t.*, d.name AS department_name
+            FROM tickets t
+            LEFT JOIN departments d ON d.department_id = t.department_id
+            WHERE t.ticket_id = ?
         """, (ticket_id,)).fetchone()
         return dict(row) if row else None
 
 
 def get_tickets_by_telegram_id(telegram_id: str) -> list[dict]:
-    """Return all tickets filed by the user with the given Telegram ID."""
     with get_connection() as conn:
         rows = conn.execute("""
-            SELECT * FROM tickets WHERE telegram_id = ? ORDER BY created_at DESC
+            SELECT t.*, d.name AS department_name
+            FROM tickets t
+            LEFT JOIN departments d ON d.department_id = t.department_id
+            WHERE t.telegram_id = ?
+            ORDER BY t.created_at DESC
         """, (telegram_id,)).fetchall()
         return [dict(row) for row in rows]
 
 
+def get_tickets_by_verified_email(email: str) -> list[dict]:
+    user = get_user_by_email(email)
+    if not user:
+        return []
+    return get_tickets_by_telegram_id(user["telegram_id"])
+
+
 def get_all_tickets() -> list[dict]:
-    """Return every ticket in the database (admin view)."""
     with get_connection() as conn:
         rows = conn.execute("""
-            SELECT * FROM tickets ORDER BY created_at DESC
+            SELECT t.*, d.name AS department_name
+            FROM tickets t
+            LEFT JOIN departments d ON d.department_id = t.department_id
+            ORDER BY t.created_at DESC
         """).fetchall()
         return [dict(row) for row in rows]
 
 
 def get_tickets_by_status(status: str) -> list[dict]:
-    """Return all tickets that currently have the given *status*."""
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT * FROM tickets WHERE status = ? ORDER BY created_at DESC
-        """, (status,)).fetchall()
-        return [dict(row) for row in rows]
+    return [ticket for ticket in get_all_tickets() if ticket.get("status") == status]
 
 
 def get_tickets_by_department(department: str) -> list[dict]:
-    """Return all tickets assigned to *department*."""
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT * FROM tickets WHERE assigned_dept = ? ORDER BY created_at DESC
-        """, (department,)).fetchall()
-        return [dict(row) for row in rows]
+    return [
+        ticket for ticket in get_all_tickets()
+        if (ticket.get("department_name") or ticket.get("assigned_dept")) == department
+    ]
 
 
 def update_ticket(ticket_id: int, update: TicketUpdate) -> None:
-    """Apply a partial update to a ticket and record an audit event.
-
-    Only non-``None`` fields in *update* are written.  A corresponding
-    ``EventCreate`` is persisted automatically.
-    """
     current = get_ticket(ticket_id)
     if not current:
         raise ValueError(f"Ticket with ID {ticket_id} does not exist.")
 
-    now = datetime.now(timezone.utc).isoformat()
-    fields_to_update = []
-    params = []
-    events_to_create = []
+    now = utc_now()
+    fields: list[str] = []
+    params: list[Any] = []
+    events: list[dict[str, str]] = []
+
+    def set_field(column: str, value: Any, action: str | None = None, details: str | None = None) -> None:
+        if value is None or value == current.get(column):
+            return
+        fields.append(f"{column} = ?")
+        params.append(value)
+        if action:
+            events.append({"action": action, "details": details or f"{column} updated"})
 
     if update.status is not None and update.status != current["status"]:
-        fields_to_update.append("status = ?")
-        params.append(update.status)
-        
-        # Determine specific action
-        action = "STATUS_UPDATED"
-        if update.status == "Resolved":
-            action = "RESOLVED"
-        elif update.status == "Closed":
-            action = "CLOSED"
-        elif update.status == "Escalated":
-            action = "ESCALATED"
-        elif update.status == "Reopened":
-            action = "REOPENED"
+        set_field("status", update.status)
+        action = {
+            "Resolved": "RESOLVED",
+            "Closed": "CLOSED",
+            "Escalated": "ESCALATED",
+            "Reopened": "REOPENED",
+        }.get(update.status, "STATUS_UPDATED")
+        events.append({"action": action, "details": f"Status changed from {current['status']} to {update.status}"})
 
-        events_to_create.append({
-            "action": action,
-            "details": f"Status changed from {current['status']} to {update.status}",
-            "actor_type": "system",
-            "actor_name": "System"
-        })
+    if update.department_id is not None and update.department_id != current.get("department_id"):
+        dept_name = get_department_name(update.department_id)
+        set_field("department_id", update.department_id)
+        set_field("assigned_dept", dept_name)
+        events.append({"action": "ROUTED", "details": f"Assigned department set to {dept_name}"})
+    elif update.assigned_dept is not None:
+        set_field("assigned_dept", update.assigned_dept, "ROUTED", f"Assigned department set to {update.assigned_dept}")
 
-    if update.assigned_dept is not None and update.assigned_dept != current["assigned_dept"]:
-        fields_to_update.append("assigned_dept = ?")
-        params.append(update.assigned_dept)
-        events_to_create.append({
-            "action": "ROUTED",
-            "details": f"Assigned department set to {update.assigned_dept}",
-            "actor_type": "system",
-            "actor_name": "System"
-        })
+    set_field("routing_reason", update.routing_reason)
+    set_field("routing_confidence", update.routing_confidence)
+    if update.target_resolution_at is not None:
+        set_field("target_resolution_at", update.target_resolution_at, "TARGET_RESOLUTION_SET", f"Target resolution set to {update.target_resolution_at}")
+        set_field("sla_deadline", update.target_resolution_at)
+    elif update.sla_deadline is not None:
+        set_field("sla_deadline", update.sla_deadline, "TARGET_RESOLUTION_SET", f"Target resolution set to {update.sla_deadline}")
 
-    if update.sla_deadline is not None and update.sla_deadline != current["sla_deadline"]:
-        fields_to_update.append("sla_deadline = ?")
-        params.append(update.sla_deadline)
-        events_to_create.append({
-            "action": "SLA_ASSIGNED",
-            "details": f"SLA deadline set to {update.sla_deadline}",
-            "actor_type": "system",
-            "actor_name": "System"
-        })
+    set_field("resolved_at", update.resolved_at)
+    set_field("closed_at", update.closed_at)
 
-    if update.resolved_at is not None:
-        fields_to_update.append("resolved_at = ?")
-        params.append(update.resolved_at)
-
-    if update.closed_at is not None:
-        fields_to_update.append("closed_at = ?")
-        params.append(update.closed_at)
-
-    if not fields_to_update:
+    if not fields:
         return
 
-    fields_to_update.append("updated_at = ?")
-    params.append(now)
-    
-    # Ticket ID in WHERE clause
-    params.append(ticket_id)
-    
-    query = f"UPDATE tickets SET {', '.join(fields_to_update)} WHERE ticket_id = ?"
+    fields.append("updated_at = ?")
+    params.extend([now, ticket_id])
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, tuple(params))
-        
-        # Log audit events
-        for event in events_to_create:
+        cursor.execute(f"UPDATE tickets SET {', '.join(fields)} WHERE ticket_id = ?", tuple(params))
+        for event in events:
             cursor.execute("""
                 INSERT INTO events (ticket_id, actor_type, actor_name, action, details, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (ticket_id, event["actor_type"], event["actor_name"], event["action"], event["details"], now))
-            
+                VALUES (?, 'system', 'System', ?, ?, ?)
+            """, (ticket_id, event["action"], event["details"], now))
         conn.commit()
 
 
-# ── Events (audit trail) ──────────────────────────────────────────────
-
-
 def create_event(event: EventCreate) -> int:
-    """Insert an audit-trail event and return its generated ID."""
-    now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO events (ticket_id, actor_type, actor_name, action, details, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (event.ticket_id, event.actor_type, event.actor_name, event.action, event.details, now))
+        """, (event.ticket_id, event.actor_type, event.actor_name, event.action, event.details, utc_now()))
         conn.commit()
-        return cursor.lastrowid
+        return int(cursor.lastrowid)
 
 
 def get_events_by_ticket(ticket_id: int) -> list[dict]:
-    """Return all events associated with *ticket_id*, oldest first."""
     with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT * FROM events WHERE ticket_id = ? ORDER BY created_at ASC
-        """, (ticket_id,)).fetchall()
+        rows = conn.execute(
+            "SELECT * FROM events WHERE ticket_id = ? ORDER BY created_at ASC",
+            (ticket_id,),
+        ).fetchall()
         return [dict(row) for row in rows]
 
 
-# ── Escalation helpers ─────────────────────────────────────────────────
-
-
 def get_overdue_tickets() -> list[dict]:
-    """Return tickets whose SLA deadline has passed without resolution.
-
-    Used by the escalation engine to identify tickets that need
-    automatic status promotion to ``"Escalated"``.
-    """
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now()
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT * FROM tickets
             WHERE status NOT IN ('Resolved', 'Closed')
-              AND sla_deadline IS NOT NULL
-              AND sla_deadline < ?
+              AND COALESCE(target_resolution_at, sla_deadline) IS NOT NULL
+              AND COALESCE(target_resolution_at, sla_deadline) < ?
         """, (now,)).fetchall()
         return [dict(row) for row in rows]
 
 
-# ── Notifications ──────────────────────────────────────────────────────
-
-
 def create_notification(notification: NotificationCreate) -> int:
-    """Queue a notification record and return its generated ID."""
-    now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -415,19 +473,175 @@ def create_notification(notification: NotificationCreate) -> int:
             notification.channel,
             notification.message,
             notification.status,
-            now
+            utc_now(),
         ))
         conn.commit()
-        return cursor.lastrowid
+        return int(cursor.lastrowid)
 
 
-# ── Departments ────────────────────────────────────────────────────────
-
-
-def get_departments() -> list[dict]:
-    """Return all department records."""
+def get_departments(include_inactive: bool = True) -> list[dict]:
+    query = "SELECT * FROM departments"
+    if not include_inactive:
+        query += " WHERE active = 1"
+    query += " ORDER BY active DESC, name ASC"
     with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT * FROM departments
-        """).fetchall()
+        rows = conn.execute(query).fetchall()
         return [dict(row) for row in rows]
+
+
+def get_active_departments() -> list[dict]:
+    return get_departments(include_inactive=False)
+
+
+def get_department(department_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM departments WHERE department_id = ?", (department_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_department_name(department_id: int | None) -> str | None:
+    if department_id is None:
+        return None
+    dept = get_department(department_id)
+    return dept["name"] if dept else None
+
+
+def create_department(
+    name: str,
+    responsibilities: str,
+    contact: str,
+    escalation_contact: str,
+) -> int:
+    now = utc_now()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO departments (
+                name, category, responsibilities, contact, escalation_contact,
+                active, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        """, (
+            name,
+            name,
+            responsibilities,
+            contact,
+            escalation_contact,
+            now,
+            now,
+        ))
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def update_department(
+    department_id: int,
+    name: str,
+    responsibilities: str,
+    contact: str,
+    escalation_contact: str,
+    active: bool,
+) -> None:
+    with get_connection() as conn:
+        conn.execute("""
+            UPDATE departments
+            SET name = ?, category = ?, responsibilities = ?,
+                contact = ?, escalation_contact = ?, active = ?, updated_at = ?
+            WHERE department_id = ?
+        """, (
+            name,
+            name,
+            responsibilities,
+            contact,
+            escalation_contact,
+            1 if active else 0,
+            utc_now(),
+            department_id,
+        ))
+        conn.commit()
+
+
+def upsert_complaint_draft(
+    telegram_id: str,
+    chat_id: str,
+    draft_complaint: str,
+    missing_fields: list[str],
+    asked_questions: list[str],
+    answers: list[str],
+    ttl_minutes: int = 60,
+) -> None:
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    expires_at = (now_dt + timedelta(minutes=ttl_minutes)).isoformat()
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO complaint_drafts (
+                telegram_id, chat_id, draft_complaint, missing_fields,
+                asked_questions, answers, created_at, updated_at, expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(telegram_id) DO UPDATE SET
+                chat_id = excluded.chat_id,
+                draft_complaint = excluded.draft_complaint,
+                missing_fields = excluded.missing_fields,
+                asked_questions = excluded.asked_questions,
+                answers = excluded.answers,
+                updated_at = excluded.updated_at,
+                expires_at = excluded.expires_at
+        """, (
+            telegram_id,
+            chat_id,
+            draft_complaint,
+            json.dumps(missing_fields),
+            json.dumps(asked_questions),
+            json.dumps(answers),
+            now,
+            now,
+            expires_at,
+        ))
+        conn.commit()
+
+
+def get_active_complaint_draft(telegram_id: str) -> dict | None:
+    now = utc_now()
+    with get_connection() as conn:
+        row = conn.execute("""
+            SELECT * FROM complaint_drafts
+            WHERE telegram_id = ? AND expires_at > ?
+        """, (telegram_id, now)).fetchone()
+        if not row:
+            return None
+        draft = dict(row)
+        for key in ("missing_fields", "asked_questions", "answers"):
+            draft[key] = json.loads(draft.get(key) or "[]")
+        return draft
+
+
+def delete_complaint_draft(telegram_id: str) -> None:
+    with get_connection() as conn:
+        conn.execute("DELETE FROM complaint_drafts WHERE telegram_id = ?", (telegram_id,))
+        conn.commit()
+
+
+def create_link_token(token: str, telegram_id: str, chat_id: str, user_name: str, ttl_minutes: int = 15) -> None:
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)).isoformat()
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO link_tokens (token, telegram_id, chat_id, user_name, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (token, telegram_id, chat_id, user_name, expires_at))
+        conn.commit()
+
+
+def consume_link_token(token: str) -> dict | None:
+    now = utc_now()
+    with get_connection() as conn:
+        row = conn.execute("""
+            SELECT * FROM link_tokens
+            WHERE token = ? AND used_at IS NULL AND expires_at > ?
+        """, (token, now)).fetchone()
+        if not row:
+            return None
+        conn.execute("UPDATE link_tokens SET used_at = ? WHERE token = ?", (now, token))
+        conn.commit()
+        return dict(row)

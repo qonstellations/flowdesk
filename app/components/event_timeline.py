@@ -5,6 +5,7 @@ _ACTION_ICON = {
     "CLASSIFIED": "🏷️",
     "ROUTED": "📍",
     "SLA_ASSIGNED": "⏰",
+    "TARGET_RESOLUTION_SET": "⏰",
     "STATUS_UPDATED": "🔄",
     "ESCALATED": "🚨",
     "RESOLVED": "✅",

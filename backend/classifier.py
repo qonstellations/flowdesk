@@ -27,17 +27,17 @@ def classify_complaint(description: str) -> dict:
     from backend.llm import call_gemini
 
     prompt = f"""You are the Classification Agent for FlowDesk.
-Analyze the following student complaint and classify it into a category and a priority level.
+    Analyze the following student complaint and classify it into a category and a priority level.
 
-Allowed Categories:
-{', '.join(constants.CATEGORIES)}
+    Allowed Categories:
+    {', '.join(constants.CATEGORIES)}
 
-Allowed Priorities:
-{', '.join(constants.PRIORITIES)}
+    Allowed Priorities:
+    {', '.join(constants.PRIORITIES)}
 
-Complaint:
-"{description}"
-"""
+    Complaint:
+    "{description}"
+    """
 
     schema = {
         "type": "OBJECT",

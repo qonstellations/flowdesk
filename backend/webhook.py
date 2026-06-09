@@ -17,10 +17,9 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
-from backend import db, telegram_helpers
-from backend.complaint_validation import validate_complaint_text
+from backend import auth, complaint_drafts, db, telegram_helpers
 
 # Load .env file so TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_URL, etc. are available
 load_dotenv()
@@ -123,22 +122,34 @@ async def telegram_webhook(request: Request) -> JSONResponse:
         await _handle_command(message_text, telegram_id, chat_id, user_name)
         return JSONResponse(content={"status": "ok"})
 
-    # ── Natural language fallback — redirect to /ticket or /help ──
-    telegram_helpers.send_message(
-        chat_id,
-        "💬 Hey! I'm not able to process free-text messages directly.\n"
-        "\n"
-        "To create a support ticket, use:\n"
-        "`/ticket <describe your issue>`\n"
-        "\n"
-        "For example:\n"
-        "• `/ticket Wi-Fi not working in Hostel Block A`\n"
-        "• `/ticket Water leakage in Room 204`\n"
-        "\n"
-        "Type /help to see all available commands.",
-    )
+    if db.get_active_complaint_draft(telegram_id):
+        await _handle_draft_reply(message_text, telegram_id, chat_id)
+    else:
+        telegram_helpers.send_message(
+            chat_id,
+            "Use `/ticket <describe your issue>` to create a support ticket, or /help for commands.",
+        )
 
     return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/auth/google/callback")
+async def google_oauth_callback(code: str | None = None, state: str | None = None) -> HTMLResponse:
+    if not code or not state:
+        return HTMLResponse("Missing Google OAuth code or state.", status_code=400)
+    try:
+        link, profile = await auth.complete_google_link(code, state)
+    except Exception as exc:
+        return HTMLResponse(f"Could not link your account: {exc}", status_code=400)
+
+    try:
+        telegram_helpers.send_message(
+            link["chat_id"],
+            f"✅ Linked to verified Google account `{profile.get('email')}`. You can now use `/ticket <issue>`.",
+        )
+    except Exception:
+        logger.exception("Failed to notify Telegram user after Google linking.")
+    return HTMLResponse("FlowDesk account linked. You can return to Telegram.")
 
 
 # ── Internal helpers ────────────────────────────────────────────────────
@@ -204,13 +215,7 @@ def _ensure_user_exists(telegram_id: str, name: str) -> None:
     if existing is None:
         from backend.models import UserCreate
 
-        db.create_user(
-            UserCreate(
-                name=name,
-                role="student",
-                telegram_id=telegram_id,
-            )
-        )
+        db.create_user(UserCreate(name=name, role="student", telegram_id=telegram_id))
         logger.info("Auto-registered new student: telegram_id=%s, name=%s", telegram_id, name)
 
 
@@ -249,14 +254,13 @@ async def _handle_command(
             f"I'm your campus complaint assistant. Use the /ticket command "
             f"to raise a support ticket.\n"
             f"\n"
+            f"First link your verified Google account with /link.\n"
+            f"\n"
             f"*Quick start:*\n"
             f"`/ticket Wi-Fi is not working in Hostel Block A`\n"
-            f"`/ticket Water leakage in Room 204`\n"
-            f"`/ticket Mess food quality has been poor this week`\n"
             f"\n"
-            f"Type /help for all commands.",
+            f"Type /help for all commands, or /status to view existing tickets.",
         )
-        # Auto-register on /start
         _ensure_user_exists(telegram_id, user_name)
 
     elif command in ("/help", "/help@flowdeskbot"):
@@ -269,6 +273,7 @@ async def _handle_command(
             "*Commands:*\n"
             "/start — Welcome message\n"
             "/help — This help text\n"
+            "/link — Link your verified Google account\n"
             "/ticket — Create a support ticket\n"
             "/status — Check your recent tickets\n"
             "\n"
@@ -277,10 +282,29 @@ async def _handle_command(
             "\n"
             "*How it works:*\n"
             "1️⃣ You describe the issue with /ticket\n"
-            "2️⃣ AI validates, classifies & routes it\n"
-            "3️⃣ You get a ticket ID + SLA deadline\n"
+            "2️⃣ AI validates, clarifies & routes it\n"
+            "3️⃣ You get a ticket ID + target resolution\n"
             "4️⃣ Staff resolves the issue\n"
             "5️⃣ You get notified when it's done",
+        )
+
+    elif command in ("/link", "/link@flowdeskbot"):
+        _ensure_user_exists(telegram_id, user_name)
+        try:
+            link_url = auth.create_link_url(telegram_id, chat_id, user_name)
+        except Exception as exc:
+            logger.exception("Could not create Google link URL.")
+            telegram_helpers.send_message(
+                chat_id,
+                f"⚠️ Account linking is not configured correctly: {exc}",
+            )
+            return
+        telegram_helpers.send_message(
+            chat_id,
+            "Open this Google sign-in link to verify your student account:\n"
+            f"{link_url}\n\n"
+            "The link expires in 15 minutes.",
+            parse_mode=None,
         )
 
     elif command in ("/status", "/status@flowdeskbot"):
@@ -299,8 +323,8 @@ async def _handle_command(
                 "In Progress": "🟡",
                 "Resolved": "🟢",
                 "Reopened": "🔵",
-                "Escalated": "🔴",
-                "Closed": "⚫",
+                "Escalated": "🟠",
+                "Closed": "🔴",
             }
             lines = ["📋 *Your Recent Tickets:*\n"]
             for t in reversed(recent):
@@ -329,8 +353,7 @@ async def _handle_ticket_command(
 ) -> None:
     """Handle the ``/ticket <description>`` command.
 
-    Validates the complaint before creating a real ticket through the
-    workflow.
+    Validates and clarifies the complaint before creating a real ticket.
 
     Parameters
     ----------
@@ -360,135 +383,91 @@ async def _handle_ticket_command(
 
     complaint_text = parts[1].strip()
 
-    validation = validate_complaint_text(complaint_text)
-    if not validation.is_valid:
-        telegram_helpers.send_message(
-            chat_id,
-            "❌ *Ticket not created.*\n"
-            "\n"
-            f"{validation.rejection_reason}\n"
-            "\n"
-            "Please describe a real campus issue and try again.\n"
-            "*Example:* `/ticket Wi-Fi not working in Hostel Block A`",
-        )
-        logger.info(
-            "Ticket rejected by deterministic validation for telegram_id=%s — reason: %s",
-            telegram_id,
-            validation.rejection_reason,
-        )
-        return
-
-    # ── Show typing indicator while validating ──
-    telegram_helpers.send_typing_action(chat_id)
-
-    # ── LLM validation gate ──
-    from backend.llm import call_gemini
-
-    validation_prompt = f"""You are a ticket validation agent for a university campus helpdesk called FlowDesk.
-Your job is to decide whether a student's message is a LEGITIMATE campus complaint that deserves a support ticket.
-
-REJECT the message (is_valid = false) if it is:
-- Random gibberish, keyboard mashing, or test messages (e.g. "asdfgh", "test", "hello", "123")
-- Greetings or casual chat (e.g. "hi", "what's up", "how are you")
-- Jokes, memes, or trolling
-- Completely empty or meaningless content
-- Not related to a campus facility, service, or academic issue at all
-- Abusive spam with no real complaint
-
-ACCEPT the message (is_valid = true) if it describes any real issue, even if vaguely, related to:
-- Infrastructure (Wi-Fi, electricity, water, maintenance)
-- Hostel or campus facilities
-- Mess or food quality
-- Academics (grades, exams, scheduling)
-- Any genuine campus concern
-
-Be lenient with grammar and spelling — students may type quickly. Focus on whether there is a REAL issue being described.
-
-Student message:
-"{complaint_text}"
-"""
-
-    validation_schema = {
-        "type": "OBJECT",
-        "properties": {
-            "is_valid": {
-                "type": "BOOLEAN",
-                "description": "true if this is a legitimate campus complaint, false if garbage/spam/irrelevant"
-            },
-            "rejection_reason": {
-                "type": "STRING",
-                "description": "A brief, friendly explanation of why the ticket was rejected (only used when is_valid is false)"
-            }
-        },
-        "required": ["is_valid", "rejection_reason"]
-    }
-
-    try:
-        result = call_gemini(validation_prompt, response_schema=validation_schema)
-        is_valid = result.get("is_valid", True)
-        rejection_reason = result.get("rejection_reason", "")
-    except Exception:
-        # If validation fails, err on the side of accepting
-        logger.warning("Ticket validation LLM call failed — accepting by default.")
-        is_valid = True
-        rejection_reason = ""
-
-    if not is_valid:
-        telegram_helpers.send_message(
-            chat_id,
-            "❌ *Ticket not created.*\n"
-            "\n"
-            f"{rejection_reason}\n"
-            "\n"
-            "Please describe a real campus issue and try again.\n"
-            "*Example:* `/ticket Wi-Fi not working in Hostel Block A`",
-        )
-        logger.info(
-            "Ticket rejected for telegram_id=%s — reason: %s",
-            telegram_id,
-            rejection_reason,
-        )
-        return
-
-    # ── Complaint is valid — auto-register and run the workflow ──
     _ensure_user_exists(telegram_id, user_name)
+    await _start_or_continue_ticket(complaint_text, telegram_id, chat_id)
+
+
+async def _handle_draft_reply(message_text: str, telegram_id: str, chat_id: str) -> None:
+    merged = complaint_drafts.merge_draft_answer(telegram_id, message_text)
+    if not merged:
+        telegram_helpers.send_message(chat_id, "That draft expired. Start again with `/ticket <issue>`.")
+        return
+    draft, combined = merged
+    await _start_or_continue_ticket(combined, telegram_id, chat_id, answers=draft.get("answers") or [])
+
+
+async def _start_or_continue_ticket(
+    complaint_text: str,
+    telegram_id: str,
+    chat_id: str,
+    answers: list[str] | None = None,
+) -> None:
+    user = db.get_user_by_telegram_id(telegram_id)
+    if not user or not user.get("is_verified"):
+        telegram_helpers.send_message(
+            chat_id,
+            "Please link a verified Google education account before creating tickets. Use /link to start.",
+        )
+        return
 
     telegram_helpers.send_typing_action(chat_id)
+    try:
+        readiness = complaint_drafts.inspect_complaint(complaint_text)
+    except Exception as exc:
+        logger.exception("Complaint readiness check failed.")
+        telegram_helpers.send_message(
+            chat_id,
+            f"⚠️ I could not validate this complaint right now: {complaint_drafts.readiness_error_message(exc)}",
+        )
+        return
 
+    if not readiness.is_valid:
+        complaint_drafts.clear_draft(telegram_id)
+        telegram_helpers.send_message(
+            chat_id,
+            "❌ *Ticket not created.*\n\n"
+            f"{readiness.reason}\n\n"
+            "Please describe a real campus issue and try again.",
+        )
+        return
+
+    if not readiness.is_complete:
+        questions = readiness.questions or ["What specific location or service is affected?"]
+        complaint_drafts.save_draft(
+            telegram_id,
+            chat_id,
+            readiness.complaint_text,
+            readiness.missing_fields,
+            questions,
+            answers=answers,
+        )
+        telegram_helpers.send_message(
+            chat_id,
+            "I need a bit more detail before creating the ticket:\n"
+            + "\n".join(f"- {question}" for question in questions),
+        )
+        return
+
+    telegram_helpers.send_typing_action(chat_id)
     try:
         from backend.workflow import run_workflow
 
-        final_state = run_workflow(
-            raw_message=complaint_text,
-            telegram_id=telegram_id,
-        )
+        final_state = run_workflow(readiness.complaint_text, telegram_id)
     except Exception as exc:
         logger.exception("Workflow failed for telegram_id=%s", telegram_id)
         telegram_helpers.send_message(
             chat_id,
-            "⚠️ Sorry, something went wrong processing your complaint. "
-            "Please try again or contact the admin directly.",
+            f"⚠️ Sorry, I could not create the ticket: {exc}",
         )
         return
 
-    # ── Send confirmation reply to the student ──
-    ticket_id = final_state.get("ticket_id")
-    category = final_state.get("category", "Unknown")
-    priority = final_state.get("priority", "Medium")
-    sla_deadline = final_state.get("sla_deadline", "TBD")
-
+    complaint_drafts.clear_draft(telegram_id)
     reply = telegram_helpers.format_ticket_reply(
-        ticket_id=ticket_id,
-        category=category,
-        priority=priority,
-        sla_deadline=sla_deadline,
+        ticket_id=final_state["ticket_id"],
+        department=final_state.get("assigned_dept"),
+        priority=final_state.get("priority") or "Medium",
+        target_resolution_at=final_state.get("target_resolution_at") or "TBD",
     )
     telegram_helpers.send_message(chat_id, reply)
 
-    logger.info(
-        "Ticket #%s created for telegram_id=%s (category=%s, priority=%s)",
-        ticket_id,
-        telegram_id,
-        category,
-        priority,
-    )
+    logger.info("Ticket #%s created for telegram_id=%s", final_state["ticket_id"], telegram_id)
