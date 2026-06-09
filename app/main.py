@@ -50,13 +50,7 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     font-size: 1.85rem;
     font-weight: 900;
     letter-spacing: -0.04em;
-    background: linear-gradient(100deg, #00E5FF 0%, #7C4DFF 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter:
-        drop-shadow(2px 2px 0px rgba(0, 229, 255, 0.6))
-        drop-shadow(4px 4px 0px rgba(124, 77, 255, 0.35))
-        drop-shadow(6px 6px 12px rgba(0, 0, 0, 0.6));
+    color: #00E5FF;
     line-height: 1.05;
 }
 .fd-brand {
@@ -100,30 +94,22 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     font-weight: 900;
     letter-spacing: -0.06em;
     line-height: 0.95;
-    background: linear-gradient(110deg, #00E5FF 0%, #a78bfa 55%, #7C4DFF 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter:
-        drop-shadow(3px 3px 0px rgba(0, 229, 255, 0.65))
-        drop-shadow(6px 6px 0px rgba(0, 180, 220, 0.45))
-        drop-shadow(9px 9px 0px rgba(124, 77, 255, 0.35))
-        drop-shadow(12px 12px 0px rgba(80, 30, 180, 0.25))
-        drop-shadow(15px 15px 28px rgba(0, 0, 0, 0.7));
-    margin-bottom: 1rem;
+    color: #E0E6F4;
+    margin-bottom: 1.5rem;
 }
 .fd-hero-sub {
-    font-size: 1.1rem;
-    color: rgba(224,230,244,0.45);
-    letter-spacing: 0.3em;
+    font-size: 1rem;
+    color: rgba(224,230,244,0.62);
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    font-weight: 300;
+    font-weight: 400;
     margin-bottom: 0.5rem;
 }
 .fd-hero-divider {
     width: 60px;
     height: 2px;
-    background: linear-gradient(90deg, #00E5FF, #7C4DFF);
-    margin: 1.8rem auto 3.5rem;
+    background: #00E5FF;
+    margin: 1.2rem auto 3rem;
     border-radius: 2px;
 }
 
@@ -135,7 +121,7 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     text-align: center;
     position: relative;
     overflow: hidden;
-    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    transition: transform 0.25s ease, border-color 0.25s ease;
     box-shadow: 0 4px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
     height: 100%;
 }
@@ -151,10 +137,10 @@ button[data-testid="collapsedControl"]    { display: none !important; }
 .role-card-admin::before   { background: linear-gradient(90deg, transparent, #FFA500, transparent); }
 
 .role-card:hover { transform: translateY(-6px); box-shadow: 0 14px 48px rgba(0,0,0,0.5); }
-.role-card-student:hover { border-color: rgba(0,229,255,0.5);  box-shadow: 0 14px 48px rgba(0,229,255,0.12); }
-.role-card-admin:hover   { border-color: rgba(255,165,0,0.5);  box-shadow: 0 14px 48px rgba(255,165,0,0.12); }
+.role-card-student:hover { border-color: rgba(0,229,255,0.5); }
+.role-card-admin:hover   { border-color: rgba(255,165,0,0.5); }
 
-.role-icon  { font-size: 3rem; margin-bottom: 1rem; }
+.role-icon  { margin-bottom: 1rem; display: flex; justify-content: center; }
 .role-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
 .role-title-student { color: #00E5FF; }
 .role-title-admin   { color: #FFA500; }
@@ -170,6 +156,10 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     font-weight: 800;
     letter-spacing: -0.03em;
     margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 .login-back {
     font-size: 0.82rem;
@@ -200,7 +190,7 @@ button[data-testid="collapsedControl"]    { display: none !important; }
 .metric-card:hover {
     transform: translateY(-5px);
     border-color: rgba(0,229,255,0.3);
-    box-shadow: 0 8px 32px rgba(0,229,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .metric-value {
     font-size: 2.8rem;
@@ -251,10 +241,9 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     border-color: rgba(0,229,255,0.6) !important;
     color: #00E5FF !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 24px rgba(0,229,255,0.18) !important;
 }
 [data-testid="stBaseButton-pillsActive"] {
-    background: linear-gradient(135deg, rgba(0,229,255,0.22), rgba(124,77,255,0.22)) !important;
+    background: rgba(0,229,255,0.12) !important;
     border: 1.5px solid #00E5FF !important;
     border-radius: 14px !important;
     color: #00E5FF !important;
@@ -264,8 +253,6 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     padding: 14px 40px !important;
     letter-spacing: 0.03em !important;
     min-width: 200px !important;
-    box-shadow: 0 0 28px rgba(0,229,255,0.28), inset 0 1px 0 rgba(255,255,255,0.1) !important;
-    text-shadow: 0 0 14px rgba(0,229,255,0.55) !important;
     transition: all 0.2s ease !important;
 }
 
@@ -279,12 +266,11 @@ div[data-testid="stButton"] > button {
 }
 div[data-testid="stButton"] > button:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 24px rgba(0,229,255,0.18) !important;
 }
 div[data-testid="stButton"] > button[kind="primary"] {
-    background: linear-gradient(135deg, #00C4E0, #6B35D9) !important;
+    background: #00C4E0 !important;
     border: none !important;
-    color: white !important;
+    color: #070C18 !important;
 }
 
 /* ── Tabs ──────────────────────────────────────────── */
@@ -317,10 +303,83 @@ div[data-testid="stTextArea"] label {
     letter-spacing: 0.05em !important;
     text-transform: uppercase !important;
 }
+
+/* ── Landing headline ──────────────────────────────── */
+.fd-headline {
+    font-size: clamp(1.1rem, 2.5vw, 1.75rem);
+    font-weight: 400;
+    color: rgba(224,230,244,0.78);
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+    margin-bottom: 2rem;
+}
+.fd-strike {
+    position: relative;
+    display: inline-block;
+    white-space: nowrap;
+    color: rgba(224,230,244,0.38);
+}
+.fd-strike-svg {
+    position: absolute;
+    left: -4px;
+    top: 0;
+    width: calc(100% + 8px);
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* ── Background pipeline animation ────────────────── */
+@keyframes fd-flow {
+    from { stroke-dashoffset: 72; }
+    to   { stroke-dashoffset: 0; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 db.init_db()
+
+st.markdown("""
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden">
+<svg width="100%" height="100%" viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+  <!-- Static structure -->
+  <line x1="220" y1="400" x2="314" y2="400" stroke="rgba(0,229,255,0.05)" stroke-width="1.2"/>
+  <line x1="364" y1="400" x2="502" y2="400" stroke="rgba(0,229,255,0.05)" stroke-width="1.2"/>
+  <path d="M 526,388 Q 600,290 716,290" stroke="rgba(0,229,255,0.05)" stroke-width="1.2" fill="none"/>
+  <line x1="526" y1="400" x2="716" y2="400" stroke="rgba(0,229,255,0.05)" stroke-width="1.2"/>
+  <path d="M 526,412 Q 600,510 716,510" stroke="rgba(0,229,255,0.05)" stroke-width="1.2" fill="none"/>
+  <path d="M 740,290 Q 840,290 888,374" stroke="rgba(0,229,255,0.05)" stroke-width="1.2" fill="none"/>
+  <line x1="740" y1="400" x2="888" y2="400" stroke="rgba(0,229,255,0.05)" stroke-width="1.2"/>
+  <path d="M 740,510 Q 840,510 888,426" stroke="rgba(0,229,255,0.05)" stroke-width="1.2" fill="none"/>
+  <!-- Animated flow dashes -->
+  <line x1="220" y1="400" x2="314" y2="400" stroke="rgba(0,229,255,0.15)" stroke-width="1.2" stroke-dasharray="6 28" style="animation:fd-flow 3.5s linear infinite;"/>
+  <line x1="364" y1="400" x2="502" y2="400" stroke="rgba(0,229,255,0.13)" stroke-width="1.2" stroke-dasharray="6 28" style="animation:fd-flow 3.5s linear infinite 0.4s;"/>
+  <path d="M 526,388 Q 600,290 716,290" stroke="rgba(0,229,255,0.10)" stroke-width="1.2" fill="none" stroke-dasharray="6 28" style="animation:fd-flow 4s linear infinite 0.8s;"/>
+  <line x1="526" y1="400" x2="716" y2="400" stroke="rgba(0,229,255,0.11)" stroke-width="1.2" stroke-dasharray="6 28" style="animation:fd-flow 3.5s linear infinite 0.6s;"/>
+  <path d="M 526,412 Q 600,510 716,510" stroke="rgba(0,229,255,0.08)" stroke-width="1.2" fill="none" stroke-dasharray="6 28" style="animation:fd-flow 4s linear infinite 1.0s;"/>
+  <path d="M 740,290 Q 840,290 888,374" stroke="rgba(0,229,255,0.08)" stroke-width="1.2" fill="none" stroke-dasharray="6 28" style="animation:fd-flow 4.5s linear infinite 1.4s;"/>
+  <line x1="740" y1="400" x2="888" y2="400" stroke="rgba(0,229,255,0.11)" stroke-width="1.2" stroke-dasharray="6 28" style="animation:fd-flow 3.5s linear infinite 1.0s;"/>
+  <path d="M 740,510 Q 840,510 888,426" stroke="rgba(0,229,255,0.07)" stroke-width="1.2" fill="none" stroke-dasharray="6 28" style="animation:fd-flow 4.5s linear infinite 1.8s;"/>
+  <!-- Complaint rect -->
+  <rect x="140" y="374" width="80" height="52" rx="5" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.1)" stroke-width="1.2"/>
+  <line x1="154" y1="388" x2="206" y2="388" stroke="rgba(0,229,255,0.07)" stroke-width="1"/>
+  <line x1="154" y1="397" x2="202" y2="397" stroke="rgba(0,229,255,0.05)" stroke-width="1"/>
+  <line x1="154" y1="406" x2="196" y2="406" stroke="rgba(0,229,255,0.04)" stroke-width="1"/>
+  <line x1="154" y1="415" x2="188" y2="415" stroke="rgba(0,229,255,0.03)" stroke-width="1"/>
+  <!-- Classify circle -->
+  <circle cx="338" cy="400" r="26" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.1)" stroke-width="1.2"/>
+  <!-- Route diamond -->
+  <polygon points="526,376 550,400 526,424 502,400" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.1)" stroke-width="1.2"/>
+  <!-- Agent circles -->
+  <circle cx="728" cy="290" r="20" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.09)" stroke-width="1.2"/>
+  <circle cx="728" cy="400" r="20" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.09)" stroke-width="1.2"/>
+  <circle cx="728" cy="510" r="20" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.09)" stroke-width="1.2"/>
+  <!-- Resolved circle + check -->
+  <circle cx="916" cy="400" r="28" fill="rgba(76,217,123,0.04)" stroke="rgba(76,217,123,0.13)" stroke-width="1.2"/>
+  <path d="M 906,400 L 912,408 L 926,392" stroke="rgba(76,217,123,0.2)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Session state ─────────────────────────────────────────────────────────
 if "page" not in st.session_state:
@@ -352,7 +411,7 @@ with nav_col1:
           <path d="M45.5 22 L49.5 26 L56.5 17" stroke="#4CD97B" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <div>
-          <div class="fd-logo">⚡ FlowDesk</div>
+          <div class="fd-logo">FlowDesk</div>
           <div class="fd-tagline">Autonomous Campus Issue Resolution</div>
         </div>
       </div>
@@ -381,6 +440,9 @@ if page == "landing":
     st.markdown("""
     <div class="fd-hero">
         <div class="fd-hero-title">FlowDesk</div>
+        <div class="fd-headline">
+            From <span class="fd-strike">&ldquo;we&rsquo;ll look into it&rdquo;<svg class="fd-strike-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M -2,82 Q 48,52 102,18" stroke="rgba(224,230,244,0.30)" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg></span> to <span style="color:#00E5FF;font-weight:700;">done</span>
+        </div>
         <div class="fd-hero-sub">Autonomous · Multi-Agent · Real-Time</div>
         <div class="fd-hero-divider"></div>
     </div>
@@ -391,7 +453,7 @@ if page == "landing":
     with c1:
         st.markdown("""
         <div class="role-card role-card-student">
-            <div class="role-icon">🎓</div>
+            <div class="role-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
             <div class="role-title role-title-student">Student Portal</div>
             <div class="role-desc">Submit complaints, track your tickets, and get real-time updates on resolution status.</div>
         </div>
@@ -404,7 +466,7 @@ if page == "landing":
     with c2:
         st.markdown("""
         <div class="role-card role-card-admin">
-            <div class="role-icon">⚙️</div>
+            <div class="role-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFA500" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg></div>
             <div class="role-title role-title-admin">Admin Dashboard</div>
             <div class="role-desc">Full system oversight — metrics, SLA enforcement, escalations, and analytics.</div>
         </div>
@@ -420,7 +482,7 @@ elif page == "login_student":
     with mid:
         st.markdown("""
         <div class="login-header">
-            <div class="login-title" style="color:#00E5FF">🎓 Student Login</div>
+            <div class="login-title" style="color:#00E5FF"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> Student Login</div>
             <div class="login-back">Enter your Telegram ID to access your tickets</div>
         </div>
         """, unsafe_allow_html=True)
@@ -443,7 +505,7 @@ elif page == "login_admin":
     with mid:
         st.markdown("""
         <div class="login-header">
-            <div class="login-title" style="color:#FFA500">⚙️ Admin Login</div>
+            <div class="login-title" style="color:#FFA500"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FFA500" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg> Admin Login</div>
             <div class="login-back">Enter the admin key to access full system controls</div>
         </div>
         """, unsafe_allow_html=True)
