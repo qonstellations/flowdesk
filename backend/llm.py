@@ -62,7 +62,8 @@ def call_llm(prompt: str, response_schema: dict[str, Any] | None = None) -> dict
         except LLMProviderError as exc:
             exc_str = str(exc).upper()
             is_transient = any(keyword in exc_str for keyword in [
-                "429", "RESOURCE_EXHAUSTED", "503", "RATE_LIMIT", "RATE LIMIT"
+                "429", "RESOURCE_EXHAUSTED", "503", "RATE_LIMIT", "RATE LIMIT",
+                "QUOTA", "EXCEEDED", "QUOTA_EXCEEDED"
             ])
             if is_transient and attempt < max_retries:
                 sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 1)

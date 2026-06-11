@@ -26,6 +26,9 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+PROCESSED_UPDATES: set[int] = set()
+MAX_PROCESSED_UPDATES_CACHE = 1000
+
 
 # ── Lifespan ────────────────────────────────────────────────────────────
 
@@ -107,7 +110,17 @@ async def telegram_webhook(request: Request) -> JSONResponse:
             content={"status": "error", "detail": "Invalid JSON"},
         )
 
-    logger.info("Received Telegram update: %s", data.get("update_id", "?"))
+    update_id = data.get("update_id")
+    if update_id is not None:
+        if update_id in PROCESSED_UPDATES:
+            logger.info("Ignoring duplicate Telegram update: %s", update_id)
+            return JSONResponse(content={"status": "ok", "detail": "duplicate"})
+        PROCESSED_UPDATES.add(update_id)
+        if len(PROCESSED_UPDATES) > MAX_PROCESSED_UPDATES_CACHE:
+            list_updates = list(PROCESSED_UPDATES)
+            PROCESSED_UPDATES = set(list_updates[-500:])
+
+    logger.info("Received Telegram update: %s", update_id or "?")
 
     # ── Extract message data ──
     try:
@@ -412,7 +425,8 @@ async def _start_or_continue_ticket(
 
     telegram_helpers.send_typing_action(chat_id)
     try:
-        readiness = complaint_drafts.inspect_complaint(complaint_text)
+        import anyio
+        readiness = await anyio.to_thread.run_sync(complaint_drafts.inspect_complaint, complaint_text)
     except Exception as exc:
         logger.exception("Complaint readiness check failed.")
         telegram_helpers.send_message(
@@ -451,8 +465,9 @@ async def _start_or_continue_ticket(
     telegram_helpers.send_typing_action(chat_id)
     try:
         from backend.workflow import run_workflow
+        import anyio
 
-        final_state = run_workflow(readiness.complaint_text, telegram_id)
+        final_state = await anyio.to_thread.run_sync(run_workflow, readiness.complaint_text, telegram_id)
     except Exception as exc:
         logger.exception("Workflow failed for telegram_id=%s", telegram_id)
         telegram_helpers.send_message(

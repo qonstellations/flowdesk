@@ -35,6 +35,14 @@ The agent is designed to investigate and resolve two main issues currently impac
   * Because streaming is disabled (`"stream": False` in [backend/llm.py](file:///D:/flowdesk/backend/llm.py#L141)), the backend blocks and waits for the entire response to compile before sending it to the user.
   * Running two sequential requests back-to-back doubles the execution time (e.g., if one call takes 6 seconds, the user waits 12 seconds just for the LLM processing).
 
+### Issue C: Webhook Override & Shared Bot Conflicts
+* **Symptom:** When multiple developers run their own servers, tickets they create still route to a teammate's server or database.
+* **Diagnosis:**
+  * A Telegram bot is uniquely identified by its `TELEGRAM_BOT_TOKEN`.
+  * Telegram can route messages for a single bot to only **one webhook URL** at a time.
+  * On startup, the backend automatically calls `set_webhook(TELEGRAM_WEBHOOK_URL)`. Whichever teammate starts their local server last registers *their* ngrok URL, overriding all other registrations.
+  * Consequently, all developers sharing the same bot token will have their traffic hijacked and sent to a single server's database.
+
 ---
 
 ## 3. Recommended Resolution Strategies (Agent Playbook)

@@ -397,6 +397,21 @@ LLM_MODEL=gemini-2.0-flash
 
 or use a stronger local instruct model.
 
+### Teammates' messages routing to the wrong server/database
+
+If multiple developers are working on the project, each developer **must** create their own Telegram bot and Google OAuth credentials.
+
+**Why this happens:**
+A Telegram bot is tied to a single token. Telegram only forwards messages to a **single webhook URL** at a time.
+If you share the same `TELEGRAM_BOT_TOKEN`:
+1. Whichever developer starts their server last will override the registered webhook with their own ngrok URL.
+2. If teammate A interacts with the bot while teammate B's server is running and holds the active webhook, all messages will be processed and stored on teammate B's database and server.
+
+**How to resolve:**
+1. **Create a unique Bot:** Each developer must message `@BotFather` on Telegram to create their own test bot and get a unique `TELEGRAM_BOT_TOKEN`.
+2. **Setup individual Webhooks:** Set your unique `TELEGRAM_WEBHOOK_URL` in your local `.env`.
+3. **Configure Google OAuth:** Each developer must register their own Google Cloud Console project and OAuth credentials (matching their unique local ngrok callback URI) and paste them in `.env`.
+
 ## 9. Reset Local Data
 
 To reset the local database:
