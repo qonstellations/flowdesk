@@ -26,10 +26,11 @@ html, body, [class*="css"], .stApp {
     font-family: 'Space Grotesk', sans-serif !important;
 }
 .stApp {
-    background: #070C18;
+    background-color: #050C1A;
     background-image:
         radial-gradient(ellipse 60% 40% at 15% 60%, rgba(0,229,255,0.055) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 50% at 85% 15%, rgba(124,77,255,0.07) 0%, transparent 70%);
+        radial-gradient(ellipse 50% 50% at 85% 15%, rgba(124,77,255,0.07) 0%, transparent 70%),
+        linear-gradient(160deg, #050C1A 0%, #062233 50%, #073D50 100%);
     color: #E0E6F4;
 }
 

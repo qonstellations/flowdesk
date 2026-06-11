@@ -101,46 +101,35 @@ def _render_ai_rationale(t: dict) -> None:
     confidence = t.get("routing_confidence")
     confidence_label = "—" if confidence is None else f"{float(confidence):.0%}"
 
+    confidence_html = (
+        '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">'
+        '<div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;'
+        'letter-spacing:0.1em;margin-bottom:3px;">Routing confidence</div>'
+        f'<div style="color:#C8D0E8;font-weight:600;font-size:0.88rem;margin-bottom:4px;">{confidence_label}</div>'
+        '</div>'
+    ) if dept else ""
+
     st.markdown(
-        f"""
-        <div style="background:rgba(12,18,34,0.6);border-radius:0 0 10px 10px;
-                    padding:14px 18px;border-left:4px solid rgba(124,77,255,0.5);
-                    border-top:1px solid rgba(124,77,255,0.15);">
-            <div style="font-size:0.78rem;color:#7C4DFF;font-weight:700;
-                        letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">
-                AI Routing Report
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                <div>
-                    <div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;
-                                letter-spacing:0.1em;margin-bottom:3px;">Department</div>
-                    <div style="color:#C8D0E8;font-weight:600;font-size:0.88rem;margin-bottom:4px;">
-                        {dept or 'Unassigned'}
-                    </div>
-                    <div style="color:#6A748A;font-size:0.78rem;line-height:1.4;">
-                        {routing_reason}
-                    </div>
-                </div>
-                <div>
-                    <div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;
-                                letter-spacing:0.1em;margin-bottom:3px;">Priority</div>
-                    <div style="color:{pc};font-weight:600;font-size:0.88rem;margin-bottom:4px;">
-                        {pri}
-                    </div>
-                    <div style="color:#6A748A;font-size:0.78rem;line-height:1.4;">
-                        {_PRIORITY_RATIONALE.get(pri, "")}
-                    </div>
-                </div>
-            </div>
-            {"" if not dept else f'''
-            <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">
-                <div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;
-                            letter-spacing:0.1em;margin-bottom:3px;">Routing confidence</div>
-                <div style="color:#C8D0E8;font-weight:600;font-size:0.88rem;margin-bottom:4px;">
-                    {confidence_label}
-                </div>
-            </div>'''}
-        </div>
-        """,
+        f'<div style="background:rgba(12,18,34,0.6);border-radius:0 0 10px 10px;'
+        f'padding:14px 18px;border-left:4px solid rgba(124,77,255,0.5);'
+        f'border-top:1px solid rgba(124,77,255,0.15);">'
+        f'<div style="font-size:0.78rem;color:#7C4DFF;font-weight:700;'
+        f'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">AI Routing Report</div>'
+        f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'
+        f'<div>'
+        f'<div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;'
+        f'letter-spacing:0.1em;margin-bottom:3px;">Department</div>'
+        f'<div style="color:#C8D0E8;font-weight:600;font-size:0.88rem;margin-bottom:4px;">{dept or "Unassigned"}</div>'
+        f'<div style="color:#6A748A;font-size:0.78rem;line-height:1.4;">{routing_reason}</div>'
+        f'</div>'
+        f'<div>'
+        f'<div style="font-size:0.72rem;color:#5A6480;text-transform:uppercase;'
+        f'letter-spacing:0.1em;margin-bottom:3px;">Priority</div>'
+        f'<div style="color:{pc};font-weight:600;font-size:0.88rem;margin-bottom:4px;">{pri}</div>'
+        f'<div style="color:#6A748A;font-size:0.78rem;line-height:1.4;">{_PRIORITY_RATIONALE.get(pri, "")}</div>'
+        f'</div>'
+        f'</div>'
+        f'{confidence_html}'
+        f'</div>',
         unsafe_allow_html=True,
     )
