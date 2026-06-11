@@ -11,8 +11,10 @@ from backend.complaint_validation import validate_complaint_text
 from backend.llm import call_llm
 from backend.llm_schemas import (
     CLARIFICATION_SCHEMA,
+    COMPLAINT_INSPECTION_SCHEMA,
     COMPLAINT_VALIDATION_SCHEMA,
     ClarificationResult,
+    ComplaintInspectionResult,
     ComplaintValidationResult,
 )
 
@@ -32,49 +34,43 @@ def inspect_complaint(text: str) -> ComplaintReadiness:
     if not deterministic.is_valid:
         return ComplaintReadiness(False, False, text, [], [], deterministic.rejection_reason)
 
-    validation_prompt = f"""You validate complaints for a university campus helpdesk.
-Decide if the message is a real campus issue and if staff have enough detail to act.
+    inspection_prompt = f"""You validate, normalize, and clarify campus complaints for a university campus helpdesk.
 
-Required signals:
-- a real campus service/facility/academic issue
-- affected service or facility
-- location when location is needed for action
-- urgency/severity when the issue sounds risky or blocking
-- enough context for staff to understand the next action
+Review the student's message:
+"{text}"
 
-Return missing_fields using short backend names such as issue, service, location, urgency, context.
+Identify the following details from the message:
+- Service/facility (e.g., Wi-Fi, heating, printer, dining)
+- Location (e.g., dorm room 405, library floor 2)
+- Urgency/severity (e.g., water leak is High/Critical, slow Wi-Fi is Low/Medium)
+- Context/Description of the issue (e.g., not working since yesterday)
 
-Student message:
-{text}
+Determine if the message is:
+1. A real campus issue (set `is_valid` to true/false).
+2. Complete enough for staff to act (set `is_complete` to true if service, location, urgency, and context are all clear or inferred. Set to false if any critical information is missing).
+
+If any of the fields (issue, service, location, urgency, context) are missing and needed:
+- List them in `missing_fields` (using only these lowercase names: 'issue', 'service', 'location', 'urgency', 'context').
+- Generate exactly 1 or 2 focused, direct follow-up questions in `next_questions` to ask the student for that missing information. Do not ask generic questions.
+
+Normalize the student's complaint into a clear, professional summary for helpdesk staff in `normalized_complaint`.
 """
-    raw_validation = call_llm(validation_prompt, COMPLAINT_VALIDATION_SCHEMA)
-    validation = ComplaintValidationResult.model_validate(raw_validation)
+    raw_inspection = call_llm(inspection_prompt, COMPLAINT_INSPECTION_SCHEMA)
+    inspection = ComplaintInspectionResult.model_validate(raw_inspection)
 
-    if not validation.is_valid:
-        return ComplaintReadiness(False, False, text, validation.missing_fields, [], validation.reason)
+    if not inspection.is_valid:
+        return ComplaintReadiness(False, False, text, inspection.missing_fields, [], inspection.reason)
 
-    clarification_prompt = f"""Normalize this campus complaint and ask at most two focused follow-up questions
-only if fields are missing. Do not ask generic questions.
-
-Complaint:
-{text}
-
-Missing fields already detected:
-{', '.join(validation.missing_fields) or 'none'}
-"""
-    raw_clarification = call_llm(clarification_prompt, CLARIFICATION_SCHEMA)
-    clarification = ClarificationResult.model_validate(raw_clarification)
-
-    missing = clarification.missing_fields or validation.missing_fields
-    questions = clarification.next_questions[:2]
-    complete = validation.is_complete and not missing
+    missing = inspection.missing_fields
+    questions = inspection.next_questions[:2]
+    complete = inspection.is_complete and not missing
     return ComplaintReadiness(
         is_valid=True,
         is_complete=complete,
-        complaint_text=clarification.normalized_complaint or text,
+        complaint_text=inspection.normalized_complaint or text,
         missing_fields=missing,
         questions=questions,
-        reason=validation.reason,
+        reason=inspection.reason,
     )
 
 

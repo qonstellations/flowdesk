@@ -20,6 +20,15 @@ class ClarificationResult(BaseModel):
     next_questions: list[str] = Field(default_factory=list, max_length=2)
 
 
+class ComplaintInspectionResult(BaseModel):
+    is_valid: bool
+    is_complete: bool
+    normalized_complaint: str
+    missing_fields: list[str] = Field(default_factory=list)
+    next_questions: list[str] = Field(default_factory=list, max_length=2)
+    reason: str = ""
+
+
 class IntakeResult(BaseModel):
     title: str
     description: str
@@ -42,5 +51,6 @@ class TargetResolutionResult(BaseModel):
 COMPLAINT_VALIDATION_SCHEMA = ComplaintValidationResult.model_json_schema()
 CLARIFICATION_SCHEMA = ClarificationResult.model_json_schema()
 INTAKE_SCHEMA = IntakeResult.model_json_schema()
+COMPLAINT_INSPECTION_SCHEMA = ComplaintInspectionResult.model_json_schema()
 ROUTING_SCHEMA = RoutingResult.model_json_schema()
 TARGET_RESOLUTION_SCHEMA = TargetResolutionResult.model_json_schema()

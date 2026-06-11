@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 from typing import Any
 
 import httpx
@@ -39,17 +41,34 @@ def call_llm(prompt: str, response_schema: dict[str, Any] | None = None) -> dict
     """
     provider = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
     llm_prompt = _schema_prompt(prompt, response_schema)
-    if provider == "gemini":
-        text = _call_gemini(llm_prompt, response_schema)
-    elif provider == "openai":
-        text = _call_openai(llm_prompt, response_schema)
-    elif provider == "ollama":
-        text = _call_ollama(llm_prompt, response_schema)
-    else:
-        raise LLMConfigError("LLM_PROVIDER must be one of: gemini, openai, ollama.")
 
-    if not text.strip():
-        raise LLMResponseError(f"{provider} returned an empty response.")
+    max_retries = 3
+    base_delay = 2.0
+
+    for attempt in range(max_retries + 1):
+        try:
+            if provider == "gemini":
+                text = _call_gemini(llm_prompt, response_schema)
+            elif provider == "openai":
+                text = _call_openai(llm_prompt, response_schema)
+            elif provider == "ollama":
+                text = _call_ollama(llm_prompt, response_schema)
+            else:
+                raise LLMConfigError("LLM_PROVIDER must be one of: gemini, openai, ollama.")
+
+            if not text.strip():
+                raise LLMResponseError(f"{provider} returned an empty response.")
+            break
+        except LLMProviderError as exc:
+            exc_str = str(exc).upper()
+            is_transient = any(keyword in exc_str for keyword in [
+                "429", "RESOURCE_EXHAUSTED", "503", "RATE_LIMIT", "RATE LIMIT"
+            ])
+            if is_transient and attempt < max_retries:
+                sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 1)
+                time.sleep(sleep_time)
+                continue
+            raise
 
     if response_schema is None:
         return {"text": text}
@@ -132,6 +151,7 @@ def _call_ollama(prompt: str, response_schema: dict[str, Any] | None) -> str:
     host = os.getenv("OLLAMA_HOST", "http://localhost:11434").strip().rstrip("/")
     model = os.getenv("LLM_MODEL", os.getenv("OLLAMA_MODEL", "llama3")).strip()
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+    keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "1h").strip()
     if not model:
         raise LLMConfigError("LLM_MODEL is required when LLM_PROVIDER=ollama.")
 
@@ -140,6 +160,7 @@ def _call_ollama(prompt: str, response_schema: dict[str, Any] | None) -> str:
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "options": {"temperature": 0.1},
+        "keep_alive": keep_alive,
     }
     if response_schema:
         payload["format"] = _lower_schema_types(response_schema)
