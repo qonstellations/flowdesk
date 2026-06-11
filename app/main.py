@@ -92,6 +92,8 @@ button[data-testid="collapsedControl"]    { display: none !important; }
 .fd-hero {
     text-align: center;
     padding: 5rem 2rem 2.5rem;
+    position: relative;
+    overflow: hidden;
 }
 .fd-hero-title {
     font-size: clamp(5rem, 14vw, 11rem);
@@ -100,14 +102,17 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     line-height: 0.95;
     color: #E0E6F4;
     margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 2;
 }
 .fd-hero-sub {
     font-size: 1rem;
     color: rgba(224,230,244,0.62);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
     font-weight: 400;
     margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 2;
 }
 .fd-hero-divider {
     width: 60px;
@@ -115,6 +120,30 @@ button[data-testid="collapsedControl"]    { display: none !important; }
     background: #00E5FF;
     margin: 1.2rem auto 3rem;
     border-radius: 2px;
+    position: relative;
+    z-index: 2;
+}
+
+/* ── Drifting background words ─────────────────────── */
+@keyframes fd-drift {
+    0%   { opacity: 0; transform: translateY(0px); }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-32px); }
+}
+.fd-drift-word {
+    position: absolute;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: rgba(0,229,255,0.5);
+    pointer-events: none;
+    white-space: nowrap;
+    animation: fd-drift 11s ease-in-out infinite;
+    opacity: 0;
+    z-index: 0;
+    user-select: none;
+    text-transform: uppercase;
 }
 
 /* ── Role cards ────────────────────────────────────── */
@@ -310,12 +339,14 @@ div[data-testid="stTextArea"] label {
 
 /* ── Landing headline ──────────────────────────────── */
 .fd-headline {
-    font-size: clamp(1.1rem, 2.5vw, 1.75rem);
+    font-size: clamp(1.25rem, 3vw, 2rem);
     font-weight: 400;
     color: rgba(224,230,244,0.78);
     letter-spacing: -0.01em;
     line-height: 1.5;
     margin-bottom: 2rem;
+    position: relative;
+    z-index: 2;
 }
 .fd-strike {
     position: relative;
@@ -337,6 +368,231 @@ div[data-testid="stTextArea"] label {
 @keyframes fd-flow {
     from { stroke-dashoffset: 72; }
     to   { stroke-dashoffset: 0; }
+}
+
+/* ── Portal entrance animation ─────────────────────── */
+@keyframes fd-page-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Zoom-through transition ───────────────────────── */
+@keyframes fd-zoom-through {
+    0%   { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(5); }
+}
+
+/* ── Landing section bands ─────────────────────────── */
+.fd-section-band {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 3.5rem 2rem;
+    border-top: 1px solid rgba(0,229,255,0.06);
+    text-align: center;
+}
+.fd-band-label {
+    font-size: 1rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #00E5FF;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    opacity: 0.6;
+}
+.fd-band-title {
+    font-size: clamp(2.4rem, 5vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #C8D0E8;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+/* ── Content panel ─────────────────────────────────── */
+.fd-panel {
+    background: linear-gradient(155deg, rgba(14,22,48,0.96) 0%, rgba(10,16,34,0.99) 100%);
+    border: 1px solid rgba(0,229,255,0.1);
+    border-radius: 20px;
+    padding: 2rem 2.4rem;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
+    position: relative;
+    overflow: hidden;
+}
+.fd-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,229,255,0.22), transparent);
+}
+.fd-problem-text {
+    font-size: 1.35rem;
+    color: rgba(224,230,244,0.68);
+    line-height: 1.85;
+    margin: 0;
+    text-align: center;
+}
+
+/* ── How It Works ──────────────────────────────────── */
+.fd-steps {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+}
+.fd-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.4rem 0.6rem;
+}
+.fd-step-icon {
+    width: 50px; height: 50px;
+    border-radius: 14px;
+    border: 1px solid rgba(0,229,255,0.2);
+    background: rgba(0,229,255,0.05);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 0.85rem;
+    flex-shrink: 0;
+}
+.fd-step-num {
+    font-size: 0.85rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(0,229,255,0.45);
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+.fd-step-label {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #C8D0E8;
+    margin-bottom: 0.3rem;
+    letter-spacing: -0.01em;
+}
+.fd-step-desc {
+    font-size: 1.05rem;
+    color: rgba(224,230,244,0.4);
+    line-height: 1.55;
+}
+.fd-step-connector {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding-top: 25px;
+}
+
+/* ── Feature cards ─────────────────────────────────── */
+.fd-features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+.fd-feature-card {
+    background: linear-gradient(155deg, rgba(18,26,50,0.95) 0%, rgba(12,18,36,0.98) 100%);
+    border: 1px solid rgba(0,229,255,0.12);
+    border-radius: 18px;
+    padding: 1.5rem 1.6rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03);
+    text-align: center;
+}
+.fd-feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,229,255,0.28), transparent);
+}
+.fd-feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(0,229,255,0.24);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.fd-feature-label {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #C8D0E8;
+    margin-bottom: 0.35rem;
+    letter-spacing: -0.01em;
+}
+.fd-feature-desc {
+    font-size: 1.05rem;
+    color: rgba(224,230,244,0.42);
+    line-height: 1.55;
+    margin: 0;
+}
+
+/* ── Mockup frames ─────────────────────────────────── */
+.fd-mockup-wrap {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.fd-mockup-frame {
+    flex: 1;
+    min-width: 220px;
+    max-width: 390px;
+    border: 1px solid rgba(0,229,255,0.14);
+    border-radius: 18px;
+    overflow: hidden;
+    background: rgba(10,16,34,0.98);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+.fd-mockup-bar {
+    background: rgba(14,22,48,0.98);
+    border-bottom: 1px solid rgba(0,229,255,0.07);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.fd-mockup-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+}
+.fd-mockup-title {
+    font-size: 0.67rem;
+    color: rgba(224,230,244,0.28);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-left: 7px;
+}
+.fd-mockup-body {
+    height: 188px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(224,230,244,0.13);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border: 1px dashed rgba(0,229,255,0.07);
+    margin: 1rem;
+    border-radius: 10px;
+}
+
+/* ── CTA line ──────────────────────────────────────── */
+.fd-cta-line {
+    text-align: center;
+    font-size: 1.2rem;
+    color: rgba(224,230,244,0.55);
+    margin-bottom: 2rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+}
+
+/* ── Responsive ────────────────────────────────────── */
+@media (max-width: 640px) {
+    .fd-steps { flex-direction: column; align-items: center; }
+    .fd-step-connector { display: none; }
+    .fd-features-grid { grid-template-columns: 1fr; }
+    .fd-mockup-wrap { flex-direction: column; align-items: center; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -393,12 +649,18 @@ if "user_name" not in st.session_state:
 
 user = getattr(st, "user", None)
 is_google_student_logged_in = bool(user and getattr(user, "is_logged_in", False))
-if is_google_student_logged_in and st.session_state.page in ("landing", "login_student"):
+if is_google_student_logged_in and st.session_state.page in ("landing", "login_student") and not st.session_state.pop("_nav_override", False):
     st.session_state.page = "portal_student"
 
 # ── Navbar ────────────────────────────────────────────────────────────────
-back_label = "← Back" if st.session_state.page != "landing" else ""
-nav_col1, nav_col2 = st.columns([8, 1])
+_back_dest = {
+    "login_student": "landing",
+    "login_admin":   "landing",
+    "portal_student": "login_student",
+    "portal_admin":   "login_admin",
+}.get(st.session_state.page, "landing")
+
+nav_col1, nav_col2 = st.columns([7, 2])
 with nav_col1:
     st.markdown("""
     <div class="fd-navbar">
@@ -432,9 +694,14 @@ with nav_col1:
     """, unsafe_allow_html=True)
 with nav_col2:
     if st.session_state.page != "landing":
-        st.markdown("<div style='padding-top:1.2rem'>", unsafe_allow_html=True)
-        if st.button("← Home", use_container_width=True):
+        st.markdown("<div style='padding-top:1.2rem;display:flex;flex-direction:column;gap:6px;'>", unsafe_allow_html=True)
+        if st.button("⌂ Home", use_container_width=True, key="nav_home"):
+            st.session_state["_nav_override"] = True
             st.session_state.page = "landing"
+            st.rerun()
+        if st.button("← Go Back", use_container_width=True, key="nav_back"):
+            st.session_state["_nav_override"] = True
+            st.session_state.page = _back_dest
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -443,17 +710,142 @@ with nav_col2:
 from pages import admin_dashboard, student_portal  # noqa: E402
 
 page = st.session_state.page
+prev_page = st.session_state.get("_prev_page", "")
+st.session_state["_prev_page"] = page
 
 # ── Landing page ──────────────────────────────────────────────────────────
 if page == "landing":
+
+    # === HERO ===
     st.markdown("""
     <div class="fd-hero">
-        <div class="fd-hero-title">FlowDesk</div>
-        <div class="fd-headline">
-            From <span class="fd-strike">&ldquo;we&rsquo;ll look into it&rdquo;<svg class="fd-strike-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M -2,82 Q 48,52 102,18" stroke="rgba(224,230,244,0.30)" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg></span> to <span style="color:#00E5FF;font-weight:700;">done</span>
+        <div class="fd-drift-word" style="top:16%;left:5%;animation-delay:0s;animation-duration:12s;">Broken AC</div>
+        <div class="fd-drift-word" style="top:58%;left:81%;animation-delay:2.5s;animation-duration:14s;">No WiFi</div>
+        <div class="fd-drift-word" style="top:28%;left:84%;animation-delay:5.0s;animation-duration:11s;">Hostel mess</div>
+        <div class="fd-drift-word" style="top:74%;left:10%;animation-delay:1.6s;animation-duration:13s;">Water leak</div>
+        <div class="fd-drift-word" style="top:10%;left:56%;animation-delay:7.2s;animation-duration:15s;">Library hours</div>
+        <div class="fd-drift-word" style="top:80%;left:54%;animation-delay:3.8s;animation-duration:12s;">Mess food</div>
+        <div style="position:relative;z-index:2;">
+            <div class="fd-hero-title">FlowDesk</div>
+            <div class="fd-headline">
+                From <span class="fd-strike">&ldquo;we&rsquo;ll look into it&rdquo;<svg class="fd-strike-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M -2,82 Q 48,52 102,18" stroke="rgba(224,230,244,0.30)" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg></span> to <span style="color:#00E5FF;font-weight:700;">done</span>
+            </div>
+            <div class="fd-hero-sub">File a campus complaint by text. Our AI routes it, tracks it, and makes sure it actually gets solved.</div>
+            <div class="fd-hero-divider"></div>
         </div>
-        <div class="fd-hero-sub">Autonomous · Multi-Agent · Real-Time</div>
-        <div class="fd-hero-divider"></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # === THE PROBLEM ===
+    st.markdown("""
+    <div class="fd-section-band">
+        <div class="fd-band-label">The Problem</div>
+        <div class="fd-band-title">Why complaints go nowhere</div>
+        <div class="fd-panel">
+            <p class="fd-problem-text">You report a broken fan, someone says they'll handle it, and three weeks later you're still sweating. Campus complaints get lost in inboxes, passed around, and forgotten. FlowDesk makes sure they don't.</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # === HOW IT WORKS ===
+    st.markdown("""
+    <div class="fd-section-band">
+        <div class="fd-band-label">How It Works</div>
+        <div class="fd-band-title">Four steps, zero follow-up emails</div>
+        <div class="fd-steps">
+            <div class="fd-step">
+                <div class="fd-step-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </div>
+                <div class="fd-step-num">Step 01</div>
+                <div class="fd-step-label">Text the bot</div>
+                <div class="fd-step-desc">File a complaint on Telegram. No app, no forms.</div>
+            </div>
+            <div class="fd-step-connector">
+                <svg width="28" height="16" viewBox="0 0 28 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="0" y1="8" x2="20" y2="8" stroke="rgba(0,229,255,0.28)" stroke-width="1.2"/>
+                    <polyline points="16,4 22,8 16,12" stroke="rgba(0,229,255,0.28)" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="fd-step">
+                <div class="fd-step-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="2"/><line x1="8" y1="2" x2="8" y2="22"/><line x1="16" y1="2" x2="16" y2="22"/><line x1="2" y1="8" x2="22" y2="8"/><line x1="2" y1="16" x2="22" y2="16"/>
+                    </svg>
+                </div>
+                <div class="fd-step-num">Step 02</div>
+                <div class="fd-step-label">AI sorts it out</div>
+                <div class="fd-step-desc">Agents classify your issue and route it to the right department.</div>
+            </div>
+            <div class="fd-step-connector">
+                <svg width="28" height="16" viewBox="0 0 28 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="0" y1="8" x2="20" y2="8" stroke="rgba(0,229,255,0.28)" stroke-width="1.2"/>
+                    <polyline points="16,4 22,8 16,12" stroke="rgba(0,229,255,0.28)" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="fd-step">
+                <div class="fd-step-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                        <polyline points="15,15 16,16.5 18,14"/>
+                    </svg>
+                </div>
+                <div class="fd-step-num">Step 03</div>
+                <div class="fd-step-label">Assigned with a deadline</div>
+                <div class="fd-step-desc">Every complaint gets an owner and a time to resolve.</div>
+            </div>
+            <div class="fd-step-connector">
+                <svg width="28" height="16" viewBox="0 0 28 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="0" y1="8" x2="20" y2="8" stroke="rgba(0,229,255,0.28)" stroke-width="1.2"/>
+                    <polyline points="16,4 22,8 16,12" stroke="rgba(0,229,255,0.28)" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="fd-step">
+                <div class="fd-step-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4CD97B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                </div>
+                <div class="fd-step-num">Step 04</div>
+                <div class="fd-step-label">Tracked till it's done</div>
+                <div class="fd-step-desc">Watch it move, and it escalates if it goes overdue.</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # === KEY FEATURES ===
+    st.markdown("""
+    <div class="fd-section-band">
+        <div class="fd-band-label">Key Features</div>
+        <div class="fd-band-title">Built to stop things slipping</div>
+        <div class="fd-features-grid">
+            <div class="fd-feature-card">
+                <div class="fd-feature-label">Telegram intake</div>
+                <p class="fd-feature-desc">Just text. No app to install, no login walls.</p>
+            </div>
+            <div class="fd-feature-card">
+                <div class="fd-feature-label">Autonomous routing</div>
+                <p class="fd-feature-desc">AI agents decide where each complaint goes, not a tired admin.</p>
+            </div>
+            <div class="fd-feature-card">
+                <div class="fd-feature-label">Runs anywhere</div>
+                <p class="fd-feature-desc">Works on Gemini, OpenAI, or fully offline with a local model.</p>
+            </div>
+            <div class="fd-feature-card">
+                <div class="fd-feature-label">Nothing slips</div>
+                <p class="fd-feature-desc">Overdue complaints escalate automatically. No more silence.</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # === CALL TO ACTION + PORTAL CARDS ===
+    st.markdown("""
+    <div class="fd-section-band" style="padding-bottom:0.5rem;">
+        <div class="fd-cta-line">Ready to stop chasing complaints? Pick your portal.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -484,6 +876,8 @@ if page == "landing":
         if st.button("Enter as Admin →", key="btn_admin", use_container_width=True, type="primary"):
             st.session_state.page = "login_admin"
             st.rerun()
+
+    st.markdown("<div style='height:5rem'/>", unsafe_allow_html=True)
 
 # ── Login: Student ─────────────────────────────────────────────────────────
 elif page == "login_student":
@@ -529,8 +923,14 @@ elif page == "login_admin":
 
 # ── Portals ────────────────────────────────────────────────────────────────
 elif page == "portal_student":
+    st.markdown("""<style>[data-testid="stMainBlockContainer"]{animation:fd-page-in 0.45s ease-out both;}</style>""", unsafe_allow_html=True)
+    if prev_page != "portal_student":
+        st.markdown('<div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:radial-gradient(ellipse at center,rgba(0,229,255,0.9) 0%,rgba(0,229,255,0.4) 20%,rgba(0,229,255,0.08) 45%,#070C18 68%);z-index:9999;pointer-events:none;transform-origin:center center;animation:fd-zoom-through 0.55s cubic-bezier(0.25,0,0.5,1) forwards;"></div>', unsafe_allow_html=True)
     student_portal.render()
 
 
 elif page == "portal_admin":
+    st.markdown("""<style>[data-testid="stMainBlockContainer"]{animation:fd-page-in 0.45s ease-out both;}</style>""", unsafe_allow_html=True)
+    if prev_page != "portal_admin":
+        st.markdown('<div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:radial-gradient(ellipse at center,rgba(255,165,0,0.9) 0%,rgba(255,165,0,0.4) 20%,rgba(255,165,0,0.08) 45%,#070C18 68%);z-index:9999;pointer-events:none;transform-origin:center center;animation:fd-zoom-through 0.55s cubic-bezier(0.25,0,0.5,1) forwards;"></div>', unsafe_allow_html=True)
     admin_dashboard.render()
