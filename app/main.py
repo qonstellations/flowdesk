@@ -39,16 +39,22 @@ section[data-testid="stSidebar"]          { display: none !important; }
 button[data-testid="collapsedControl"]    { display: none !important; }
 [data-testid="stDecoration"]              { display: none !important; }
 
+/* ── Remove Streamlit default top padding ──────────── */
+.block-container { padding-top: 0 !important; }
+[data-testid="stMain"] > div:first-child { padding-top: 0 !important; }
+
+/* ── Flush navbar column to left edge ──────────────── */
+.block-container > div:first-child div[data-testid="stHorizontalBlock"] > div:first-child {
+    padding-left: 0 !important;
+}
+
 /* ── Top navbar ────────────────────────────────────── */
 .fd-navbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 32px;
-    background: rgba(12, 18, 34, 0.88);
-    border-bottom: 1px solid rgba(0,229,255,0.1);
-    backdrop-filter: blur(16px);
-    border-radius: 0 0 18px 18px;
+    padding: 10px 16px 10px 0;
+    background: transparent;
     margin-bottom: 0;
 }
 .fd-logo {
@@ -657,30 +663,34 @@ if is_google_student_logged_in and st.session_state.page in ("landing", "login_s
 _back_dest = {
     "login_student": "landing",
     "login_admin":   "landing",
-    "portal_student": "login_student",
+    "portal_student": "landing",
     "portal_admin":   "login_admin",
 }.get(st.session_state.page, "landing")
 
-nav_col1, nav_col2 = st.columns([7, 2])
+nav_col1, nav_col2 = st.columns([5, 4])
 with nav_col1:
     st.markdown("""
     <div class="fd-navbar">
       <div class="fd-brand">
         <svg class="fd-brand-icon" width="64" height="44" viewBox="0 0 64 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <!-- Complaint ticket -->
-          <rect x="1" y="4" width="20" height="28" rx="4" fill="rgba(0,229,255,0.06)" stroke="#00E5FF" stroke-width="1.4"/>
-          <rect x="5" y="9"  width="3" height="3" rx="1" fill="#00E5FF" opacity="0.7"/>
-          <line x1="11" y1="10.5" x2="18" y2="10.5" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
-          <rect x="5" y="15" width="3" height="3" rx="1" fill="#00E5FF" opacity="0.7"/>
-          <line x1="11" y1="16.5" x2="18" y2="16.5" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
-          <rect x="5" y="21" width="3" height="3" rx="1" fill="#00E5FF" opacity="0.4"/>
-          <line x1="11" y1="22.5" x2="15" y2="22.5" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.3"/>
+          <!-- Phone body -->
+          <rect x="0" y="2" width="22" height="40" rx="4" fill="rgba(0,229,255,0.06)" stroke="#00E5FF" stroke-width="1.4"/>
+          <!-- Camera dot -->
+          <circle cx="11" cy="5" r="1" fill="#00E5FF" opacity="0.4"/>
+          <!-- Screen -->
+          <rect x="2.5" y="8" width="17" height="22" rx="2" fill="rgba(0,229,255,0.04)" stroke="rgba(0,229,255,0.2)" stroke-width="0.8"/>
+          <!-- Telegram paper plane inside screen -->
+          <path d="M5,23 L19,11 L15,27 Z" fill="rgba(0,229,255,0.3)" stroke="#00E5FF" stroke-width="1" stroke-linejoin="round"/>
+          <line x1="5" y1="23" x2="11" y2="19" stroke="#00E5FF" stroke-width="0.8" stroke-linecap="round" opacity="0.55"/>
+          <line x1="11" y1="19" x2="15" y2="27" stroke="#00E5FF" stroke-width="0.8" stroke-linecap="round" opacity="0.55"/>
+          <!-- Home button -->
+          <circle cx="11" cy="38" r="2" fill="none" stroke="#00E5FF" stroke-width="1" opacity="0.4"/>
           <!-- Arrow -->
-          <path d="M25 22 L38 22" stroke="rgba(0,229,255,0.4)" stroke-width="1.4" stroke-linecap="round"/>
-          <path d="M35 18.5 L39 22 L35 25.5" stroke="rgba(0,229,255,0.4)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M26 22 L36 22" stroke="rgba(0,229,255,0.4)" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M33 18.5 L37 22 L33 25.5" stroke="rgba(0,229,255,0.4)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <!-- Resolved badge -->
-          <circle cx="51" cy="22" r="11" fill="rgba(76,217,123,0.08)" stroke="#4CD97B" stroke-width="1.4"/>
-          <path d="M45.5 22 L49.5 26 L56.5 17" stroke="#4CD97B" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="52" cy="22" r="11" fill="rgba(76,217,123,0.08)" stroke="#4CD97B" stroke-width="1.4"/>
+          <path d="M46.5 22 L50.5 26 L57.5 17" stroke="#4CD97B" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <div>
           <div class="fd-logo">FlowDesk</div>
@@ -695,15 +705,28 @@ with nav_col1:
     """, unsafe_allow_html=True)
 with nav_col2:
     if st.session_state.page != "landing":
-        st.markdown("<div style='padding-top:1.2rem;display:flex;flex-direction:column;gap:6px;'>", unsafe_allow_html=True)
-        if st.button("⌂ Home", use_container_width=True, key="nav_home"):
-            st.session_state["_nav_override"] = True
-            st.session_state.page = "landing"
-            st.rerun()
-        if st.button("← Go Back", use_container_width=True, key="nav_back"):
-            st.session_state["_nav_override"] = True
-            st.session_state.page = _back_dest
-            st.rerun()
+        st.markdown("<div style='padding-top:1.2rem'>", unsafe_allow_html=True)
+        if st.session_state.page == "portal_admin":
+            nb1, nb2, nb3 = st.columns(3)
+        else:
+            nb1, nb2 = st.columns(2)
+            nb3 = None
+        with nb1:
+            if st.button("⌂ Home", use_container_width=True, key="nav_home"):
+                st.session_state["_nav_override"] = True
+                st.session_state.page = "landing"
+                st.rerun()
+        with nb2:
+            if st.button("← Back", use_container_width=True, key="nav_back"):
+                st.session_state["_nav_override"] = True
+                st.session_state.page = _back_dest
+                st.rerun()
+        if nb3:
+            with nb3:
+                if st.button("🎓 Student", use_container_width=True, key="nav_student"):
+                    st.session_state["_nav_override"] = True
+                    st.session_state.page = "login_student"
+                    st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -720,12 +743,12 @@ if page == "landing":
     # === HERO ===
     st.markdown("""
     <div class="fd-hero">
-        <div class="fd-drift-word" style="top:16%;left:5%;animation-delay:0s;animation-duration:12s;">Broken AC</div>
-        <div class="fd-drift-word" style="top:58%;left:81%;animation-delay:2.5s;animation-duration:14s;">No WiFi</div>
-        <div class="fd-drift-word" style="top:28%;left:84%;animation-delay:5.0s;animation-duration:11s;">Hostel mess</div>
-        <div class="fd-drift-word" style="top:74%;left:10%;animation-delay:1.6s;animation-duration:13s;">Water leak</div>
-        <div class="fd-drift-word" style="top:10%;left:56%;animation-delay:7.2s;animation-duration:15s;">Library hours</div>
-        <div class="fd-drift-word" style="top:80%;left:54%;animation-delay:3.8s;animation-duration:12s;">Mess food</div>
+        <div class="fd-drift-word" style="top:18%;left:22%;animation-delay:0s;animation-duration:12s;">❄️ Broken AC</div>
+        <div class="fd-drift-word" style="top:55%;left:58%;animation-delay:2.5s;animation-duration:14s;">📶 No WiFi</div>
+        <div class="fd-drift-word" style="top:30%;left:62%;animation-delay:5.0s;animation-duration:11s;">🛏️ Hostel mess</div>
+        <div class="fd-drift-word" style="top:68%;left:25%;animation-delay:1.6s;animation-duration:13s;">💧 Water leak</div>
+        <div class="fd-drift-word" style="top:12%;left:42%;animation-delay:7.2s;animation-duration:15s;">📚 Library hours</div>
+        <div class="fd-drift-word" style="top:78%;left:46%;animation-delay:3.8s;animation-duration:12s;">🍽️ Mess food</div>
         <div style="position:relative;z-index:2;">
             <div class="fd-hero-title">FlowDesk</div>
             <div class="fd-headline">

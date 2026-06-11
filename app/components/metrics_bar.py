@@ -26,3 +26,18 @@ def render_metrics_bar(metrics: dict) -> None:
             """,
             unsafe_allow_html=True,
         )
+        active = st.session_state.get("metrics_filter") == label
+        btn_label = f"▴ Close" if active else f"▾ View"
+        if col.button(btn_label, key=f"metric_btn_{label}", use_container_width=True):
+            if active:
+                st.session_state.pop("metrics_filter", None)
+            else:
+                st.session_state["metrics_filter"] = label
+            st.rerun()
+
+    if all(v == 0 for v in metrics.values()):
+        st.markdown(
+            '<div style="text-align:center;padding:18px 0 6px;color:#5A6480;font-size:0.88rem;">'
+            '✦ No complaints yet — the campus is quiet.</div>',
+            unsafe_allow_html=True,
+        )

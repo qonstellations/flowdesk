@@ -62,6 +62,20 @@ def _show_ticket_list(email: str) -> None:
         st.info("No tickets found for this verified account. Use Telegram /ticket to file one.")
         return
 
+    st.markdown(
+        '<div style="background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.18);'
+        'border-radius:10px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
+        '<span style="font-size:1.3rem;">💬</span>'
+        '<div>'
+        '<div style="color:#00E5FF;font-size:0.82rem;font-weight:700;letter-spacing:0.05em;">'
+        'File a new complaint via Telegram</div>'
+        '<div style="color:#8A94B0;font-size:0.78rem;margin-top:2px;">'
+        'Open <b style="color:#C8D0E8;">@flowdeskai_bot</b> and send <b style="color:#C8D0E8;">/ticket</b> to submit a new complaint.</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
     st.caption(f"{len(tickets)} ticket(s) on record")
     render_ticket_table(tickets)
 
