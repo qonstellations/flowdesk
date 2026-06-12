@@ -78,9 +78,9 @@ def send_department_completion_link(ticket: dict, token: str) -> bool:
                 dept_email = dept.get("escalation_contact") or ""
                 
     if not dept_email:
-        logger.warning(f"No escalation email found for department '{dept_name}' on Ticket #{ticket['ticket_id']}.")
+        logger.warning(f"No escalation email found for department '{dept_name}' on Ticket #{ticket['ticket_id']}. Falling back to test email.")
         # Use a fallback email for testing
-        dept_email = f"facilities-fallback@{config['from'].split('@')[-1] if '@' in config['from'] else 'flowdesk.edu'}"
+        dept_email = "pp398444@gmail.com"
 
     # Construct the completion link
     completion_link = f"{config['base_url']}/api/tickets/complete?token={token}"

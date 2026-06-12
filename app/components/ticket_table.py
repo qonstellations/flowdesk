@@ -47,6 +47,17 @@ def render_ticket_table(tickets: list) -> None:
         status = t.get("status", "Open")
         target_at = t.get("target_resolution_at") or t.get("sla_deadline")
         overdue = _is_overdue(target_at, status)
+        
+        validation_badge = ""
+        if status == "Open":
+            val_status = t.get("admin_approved", 0)
+            if val_status == 1:
+                validation_badge = '<span style="color:#4CD97B;padding:2px 9px;border-radius:20px;font-size:0.7rem;font-weight:600;border:1px solid #4CD97B60;background:rgba(76,217,123,0.1);margin-right:4px;">✓ Approved</span>'
+            elif val_status == -1:
+                validation_badge = '<span style="color:#FF4D6D;padding:2px 9px;border-radius:20px;font-size:0.7rem;font-weight:600;border:1px solid #FF4D6D60;background:rgba(255,77,109,0.1);margin-right:4px;">✗ Rejected</span>'
+            else:
+                validation_badge = '<span style="color:#FFD700;padding:2px 9px;border-radius:20px;font-size:0.7rem;font-weight:600;border:1px solid #FFD70060;background:rgba(255,215,0,0.1);margin-right:4px;">⚡ Needs Review</span>'
+
         sc = _STATUS_COLOR.get(status, "#00E5FF")
         pc = _PRIORITY_COLOR.get(t.get("priority", "Low"), "#00E5FF")
         border = "#FF4D6D" if overdue else sc
@@ -73,6 +84,7 @@ def render_ticket_table(tickets: list) -> None:
                         {target_html}
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;margin-left:12px;">
+                        {validation_badge}
                         <span style="color:{pc};padding:2px 9px;border-radius:20px;
                               font-size:0.7rem;font-weight:600;border:1px solid {pc}60;">
                             {t.get('priority','')}</span>

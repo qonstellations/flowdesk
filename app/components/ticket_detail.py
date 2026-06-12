@@ -226,6 +226,35 @@ def render_ticket_detail(
 # ── Role-specific control panels ───────────────────────────────────────────
 
 def _admin_controls(ticket: dict, tid: int, current_status: str) -> None:
+    # ── Ticket Validation Controls (Approve / Reject) ──
+    if current_status == "Open":
+        val_status = ticket.get("admin_approved", 0)
+        st.markdown(
+            '<div style="font-size:0.72rem;color:#FFD700;font-weight:700;'
+            'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;">'
+            "Ticket Routing Validation</div>",
+            unsafe_allow_html=True,
+        )
+        col_val_approve, col_val_reject, _ = st.columns([2, 2, 3])
+        
+        with col_val_approve:
+            if st.button("✓ Approve to Email Dept", key=f"btn_approve_val_{tid}", type="primary", use_container_width=True):
+                import backend.validation_workflow as vw
+                if vw.approve_ticket_by_admin(tid):
+                    st.success("Ticket approved and escalation email sent to department.")
+                    st.rerun()
+                else:
+                    st.error("Failed to approve ticket or send email.")
+                    
+        with col_val_reject:
+            if st.button("✗ Reject Ticket", key=f"btn_reject_val_{tid}", use_container_width=True):
+                import backend.validation_workflow as vw
+                if vw.reject_ticket_by_admin(tid):
+                    st.info("Ticket marked as rejected / validation failed.")
+                    st.rerun()
+        
+        st.markdown("---")
+
     st.markdown(
         '<div style="font-size:0.72rem;color:#7C4DFF;font-weight:700;'
         'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;">'

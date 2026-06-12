@@ -221,11 +221,10 @@ async def complete_ticket(token: str = Query(..., description="Secure resolution
         user = db.get_user_by_telegram_id(ticket["telegram_id"])
         student_email = user.get("verified_email") if user else None
         
-        if student_email:
-            email_service.send_student_resolution_notification(ticket, student_email)
-            logger.info(f"Student notification email queued for ticket #{ticket_id} to {student_email}")
-        else:
-            logger.warning(f"No verified email found for user {ticket['telegram_id']} (Ticket #{ticket_id}). Skipping student email.")
+        # For testing, override student target email to pp398444@gmail.com
+        test_student_email = "pp398444@gmail.com"
+        email_service.send_student_resolution_notification(ticket, test_student_email)
+        logger.info(f"Student notification email sent for ticket #{ticket_id} to {test_student_email} (override from {student_email})")
         
         # Return success page
         html = SUCCESS_HTML.format(
