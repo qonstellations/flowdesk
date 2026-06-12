@@ -97,6 +97,8 @@ def init_db() -> None:
         _add_column(conn, "tickets", "routing_reason", "TEXT")
         _add_column(conn, "tickets", "routing_confidence", "REAL")
         _add_column(conn, "tickets", "target_resolution_at", "TEXT")
+        _add_column(conn, "tickets", "admin_approved", "INTEGER NOT NULL DEFAULT 0")
+        _add_column(conn, "tickets", "validation_token", "TEXT")
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS complaint_drafts (
@@ -645,3 +647,59 @@ def consume_link_token(token: str) -> dict | None:
         conn.execute("UPDATE link_tokens SET used_at = ? WHERE token = ?", (now, token))
         conn.commit()
         return dict(row)
+
+
+def set_ticket_validation(ticket_id: int, admin_approved: int, validation_token: str | None = None) -> None:
+    now = utc_now()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE tickets
+            SET admin_approved = ?, validation_token = ?, updated_at = ?
+            WHERE ticket_id = ?
+        """, (admin_approved, validation_token, now, ticket_id))
+        
+        # Add audit trail event
+        action = "ADMIN_APPROVED" if admin_approved == 1 else "ADMIN_REJECTED"
+        details = (
+            "Ticket approved by admin. Email queued/sent to department."
+            if admin_approved == 1
+            else "Ticket rejected/validation failed by admin."
+        )
+        cursor.execute("""
+            INSERT INTO events (ticket_id, actor_type, actor_name, action, details, created_at)
+            VALUES (?, 'admin', 'Admin', ?, ?, ?)
+        """, (ticket_id, action, details, now))
+        conn.commit()
+
+
+def get_ticket_by_validation_token(token: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute("""
+            SELECT t.*, d.name AS department_name, d.escalation_contact AS department_email
+            FROM tickets t
+            LEFT JOIN departments d ON d.department_id = t.department_id
+            WHERE t.validation_token = ?
+        """, (token,)).fetchone()
+        return dict(row) if row else None
+
+
+def resolve_ticket_by_token(ticket_id: int) -> None:
+    now = utc_now()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        # Mark ticket as resolved
+        cursor.execute("""
+            UPDATE tickets
+            SET status = 'Resolved', resolved_at = ?, validation_token = NULL, updated_at = ?
+            WHERE ticket_id = ?
+        """, (now, now, ticket_id))
+        
+        # Create event
+        cursor.execute("""
+            INSERT INTO events (ticket_id, actor_type, actor_name, action, details, created_at)
+            VALUES (?, 'system', 'System', 'RESOLVED', 'Ticket marked resolved via secure email link.', ?)
+        """, (ticket_id, now))
+        conn.commit()
+
+

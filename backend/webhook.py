@@ -69,6 +69,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from backend.email_routes import router as email_router
+app.include_router(email_router)
+
+
 
 # ── Health check ────────────────────────────────────────────────────────
 
