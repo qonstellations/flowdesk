@@ -32,8 +32,8 @@ def call_llm(prompt: str, response_schema: dict[str, Any] | None = None) -> dict
     """Call the configured LLM provider and return a parsed dictionary.
 
     Required environment:
-    - ``LLM_PROVIDER=gemini|openai|ollama``
-    - ``LLM_API_KEY`` for Gemini/OpenAI
+    - ``LLM_PROVIDER=gemini|openai|openrouter|ollama``
+    - ``LLM_API_KEY`` for Gemini/OpenAI/OpenRouter
     - ``LLM_MODEL`` for all providers
     - ``OLLAMA_HOST`` for Ollama, defaulting to localhost
     """
@@ -43,10 +43,12 @@ def call_llm(prompt: str, response_schema: dict[str, Any] | None = None) -> dict
         text = _call_gemini(llm_prompt, response_schema)
     elif provider == "openai":
         text = _call_openai(llm_prompt, response_schema)
+    elif provider == "openrouter":
+        text = _call_openrouter(llm_prompt, response_schema)
     elif provider == "ollama":
         text = _call_ollama(llm_prompt, response_schema)
     else:
-        raise LLMConfigError("LLM_PROVIDER must be one of: gemini, openai, ollama.")
+        raise LLMConfigError("LLM_PROVIDER must be one of: gemini, openai, openrouter, ollama.")
 
     if not text.strip():
         raise LLMResponseError(f"{provider} returned an empty response.")
@@ -120,6 +122,43 @@ def _call_openai(prompt: str, response_schema: dict[str, Any] | None) -> str:
             headers={"Authorization": f"Bearer {api_key}"},
             json=payload,
             timeout=40.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"] or ""
+    except Exception as exc:
+        raise LLMProviderError(_redact(str(exc), api_key)) from exc
+
+
+def _call_openrouter(prompt: str, response_schema: dict[str, Any] | None) -> str:
+    api_key = os.getenv("LLM_API_KEY", "").strip()
+    model = os.getenv("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free").strip()
+    if not api_key:
+        raise LLMConfigError("LLM_API_KEY is required when LLM_PROVIDER=openrouter.")
+    if not model:
+        raise LLMConfigError("LLM_MODEL is required when LLM_PROVIDER=openrouter.")
+
+    messages = [
+        {"role": "user", "content": prompt},
+    ]
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.1,
+    }
+    if response_schema:
+        payload["response_format"] = {"type": "json_object"}
+
+    try:
+        response = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://github.com/qonstellations/flowdesk",
+                "X-Title": "FlowDesk",
+            },
+            json=payload,
+            timeout=60.0,
         )
         response.raise_for_status()
         data = response.json()
