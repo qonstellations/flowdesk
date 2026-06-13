@@ -38,7 +38,7 @@ def show_event_timeline(events: list) -> None:
         ts = raw_ts[:16].replace("T", " ") if raw_ts else ""
         color = _ACTOR_COLOR.get(actor_type, "#8A94B0")
 
-        st.markdown(
+        st.html(
             f"""
             <div style="display:flex;gap:12px;align-items:flex-start;
                         margin-bottom:10px;padding:10px 14px;
@@ -54,6 +54,5 @@ def show_event_timeline(events: list) -> None:
                     {"" if not details else f'<br><span style="color:#8A94B0;font-size:0.8rem;">{details}</span>'}
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )

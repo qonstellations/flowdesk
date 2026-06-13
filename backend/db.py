@@ -414,6 +414,26 @@ def update_ticket(ticket_id: int, update: TicketUpdate) -> None:
     set_field("resolved_at", update.resolved_at)
     set_field("closed_at", update.closed_at)
 
+    # ── Email flow integration (connected to frontend logic) ──────────────────
+    validation_token_to_send = None
+    status_is_assigned = (update.status == "Assigned") or (update.status is None and current.get("status") == "Assigned")
+    dept_is_changing = (update.department_id is not None and update.department_id != current.get("department_id"))
+    
+    if (update.status == "Assigned" and current.get("status") != "Assigned") or (status_is_assigned and dept_is_changing):
+        import secrets
+        validation_token_to_send = secrets.token_urlsafe(24)
+        fields.append("admin_approved = ?")
+        params.append(1)
+        fields.append("validation_token = ?")
+        params.append(validation_token_to_send)
+        events.append({"action": "ADMIN_APPROVED", "details": "Ticket approved by admin. Email queued/sent to department."})
+    elif update.status == "Rejected" and current.get("status") != "Rejected":
+        fields.append("admin_approved = ?")
+        params.append(-1)
+        fields.append("validation_token = ?")
+        params.append(None)
+        events.append({"action": "ADMIN_REJECTED", "details": "Ticket rejected/validation failed by admin."})
+
     if not fields:
         return
 
@@ -429,6 +449,16 @@ def update_ticket(ticket_id: int, update: TicketUpdate) -> None:
                 VALUES (?, 'system', 'System', ?, ?, ?)
             """, (ticket_id, event["action"], event["details"], now))
         conn.commit()
+
+    if validation_token_to_send:
+        try:
+            import backend.email_service as email_service
+            updated_ticket = get_ticket(ticket_id)
+            if updated_ticket:
+                email_service.send_department_completion_link(updated_ticket, validation_token_to_send)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception(f"Failed to send email inside update_ticket: {e}")
 
 
 def create_event(event: EventCreate) -> int:

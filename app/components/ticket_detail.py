@@ -120,7 +120,7 @@ def render_ticket_detail(
     overdue  = _is_overdue(ticket)
 
     # ── Section 1: Header ─────────────────────────────────────────────────
-    st.markdown(
+    st.html(
         f"""
         <div style="background:rgba(14,22,48,0.8);border-radius:16px 16px 0 0;
                     padding:20px 24px 16px;
@@ -142,8 +142,7 @@ def render_ticket_detail(
                   'background:#FF4D6D12;">⚠ TARGET OVERDUE</span>' if overdue else ''}
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     # ── Section 2: Metadata grid ──────────────────────────────────────────
@@ -167,7 +166,7 @@ def render_ticket_detail(
     if ticket.get("closed_at"):
         right_html += _meta_cell("Closed at",   _fmt_ts(ticket["closed_at"]),   "#8A94B0")
 
-    st.markdown(
+    st.html(
         f"""
         <div style="background:rgba(10,16,34,0.7);padding:18px 24px;
                     border-left:4px solid {'#FF4D6D' if overdue else sc};
@@ -177,20 +176,18 @@ def render_ticket_detail(
                 <div>{right_html}</div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     # ── Section 3: Description ────────────────────────────────────────────
     with st.expander("📄 Full Description", expanded=False):
-        st.markdown(
+        st.html(
             f"""
             <div style="color:#C8D0E8;font-size:0.9rem;line-height:1.7;
                         padding:4px 0;">
                 {ticket.get('description', '—')}
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
     if ticket.get("routing_reason"):
@@ -198,11 +195,10 @@ def render_ticket_detail(
             st.write(ticket["routing_reason"])
 
     # ── Section 4: Update controls ────────────────────────────────────────
-    st.markdown(
+    st.html(
         '<div style="background:rgba(12,18,34,0.6);border-radius:0 0 16px 16px;'
         'padding:18px 24px;border-left:4px solid rgba(124,77,255,0.4);'
-        'border-top:1px solid rgba(255,255,255,0.04);">',
-        unsafe_allow_html=True,
+        'border-top:1px solid rgba(255,255,255,0.04);">'
     )
 
     if role == "admin":
@@ -210,56 +206,25 @@ def render_ticket_detail(
     elif role == "staff":
         _staff_controls(ticket, tid, status)
     else:
-        st.markdown(
+        st.html(
             '<p style="color:#5A6480;font-size:0.85rem;margin:0;">'
-            "Status updates are handled by the assigned department.</p>",
-            unsafe_allow_html=True,
+            "Status updates are handled by the assigned department.</p>"
         )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.html("</div>")
 
     # ── Section 5: Event timeline ─────────────────────────────────────────
-    st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+    st.html("<div style='margin-top:20px;'></div>")
     show_event_timeline(events)
 
 
 # ── Role-specific control panels ───────────────────────────────────────────
 
 def _admin_controls(ticket: dict, tid: int, current_status: str) -> None:
-    # ── Ticket Validation Controls (Approve / Reject) ──
-    if current_status == "Open":
-        val_status = ticket.get("admin_approved", 0)
-        st.markdown(
-            '<div style="font-size:0.72rem;color:#FFD700;font-weight:700;'
-            'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;">'
-            "Ticket Routing Validation</div>",
-            unsafe_allow_html=True,
-        )
-        col_val_approve, col_val_reject, _ = st.columns([2, 2, 3])
-        
-        with col_val_approve:
-            if st.button("✓ Approve to Email Dept", key=f"btn_approve_val_{tid}", type="primary", use_container_width=True):
-                import backend.validation_workflow as vw
-                if vw.approve_ticket_by_admin(tid):
-                    st.success("Ticket approved and escalation email sent to department.")
-                    st.rerun()
-                else:
-                    st.error("Failed to approve ticket or send email.")
-                    
-        with col_val_reject:
-            if st.button("✗ Reject Ticket", key=f"btn_reject_val_{tid}", use_container_width=True):
-                import backend.validation_workflow as vw
-                if vw.reject_ticket_by_admin(tid):
-                    st.info("Ticket marked as rejected / validation failed.")
-                    st.rerun()
-        
-        st.markdown("---")
-
-    st.markdown(
+    st.html(
         '<div style="font-size:0.72rem;color:#7C4DFF;font-weight:700;'
         'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;">'
-        "Admin Controls</div>",
-        unsafe_allow_html=True,
+        "Admin Controls</div>"
     )
 
     col_s, col_d, col_b = st.columns([2, 2, 1])
@@ -285,7 +250,7 @@ def _admin_controls(ticket: dict, tid: int, current_status: str) -> None:
         key=f"detail_admin_dept_{tid}",
     )
 
-    col_b.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+    col_b.html("<div style='margin-top:28px;'></div>")
     if col_b.button("Apply", key=f"detail_admin_apply_{tid}",
                     use_container_width=True, type="primary"):
         changed = False
@@ -314,18 +279,16 @@ def _admin_controls(ticket: dict, tid: int, current_status: str) -> None:
 def _staff_controls(ticket: dict, tid: int, current_status: str) -> None:
     transitions = _STAFF_TRANSITIONS.get(current_status, [])
 
-    st.markdown(
+    st.html(
         '<div style="font-size:0.72rem;color:#4CD97B;font-weight:700;'
         'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;">'
-        "Staff Actions</div>",
-        unsafe_allow_html=True,
+        "Staff Actions</div>"
     )
 
     if not transitions:
-        st.markdown(
+        st.html(
             '<p style="color:#5A6480;font-size:0.85rem;margin:0;">'
-            f"No further transitions available from <b>{current_status}</b>.</p>",
-            unsafe_allow_html=True,
+            f"No further transitions available from <b>{current_status}</b>.</p>"
         )
         return
 
@@ -335,7 +298,7 @@ def _staff_controls(ticket: dict, tid: int, current_status: str) -> None:
         transitions,
         key=f"detail_staff_status_{tid}",
     )
-    col_b.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+    col_b.html("<div style='margin-top:28px;'></div>")
     if col_b.button("✓ Update", key=f"detail_staff_apply_{tid}",
                     use_container_width=True, type="primary"):
         now = datetime.now(timezone.utc).isoformat()

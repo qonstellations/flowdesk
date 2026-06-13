@@ -4,9 +4,10 @@ import streamlit as st
 
 import backend.db as db
 from backend.escalation import escalate_overdue_tickets
+from backend.models import TicketUpdate
 from components.metrics_bar import render_metrics_bar
 from components.ticket_detail import render_ticket_detail
-from components.ticket_table import render_ticket_table
+from components.ticket_table import render_ticket_table, _PRIORITY_COLOR, _STATUS_COLOR
 
 
 
@@ -80,7 +81,7 @@ def _show_all_tickets(tickets: list) -> None:
     col_s, col_d, col_p = st.columns(3)
     status_filter = col_s.selectbox(
         "Filter by status",
-        ["All", "Open", "Assigned", "In Progress", "Escalated", "Resolved", "Reopened", "Closed"],
+        ["All", "Open", "Assigned", "In Progress", "Escalated", "Resolved", "Reopened", "Closed", "Rejected"],
         key="admin_status_filter",
     )
     department_names = sorted({
@@ -110,14 +111,162 @@ def _show_all_tickets(tickets: list) -> None:
         filtered = [t for t in filtered if t["priority"] == priority_filter]
 
     st.caption(f"Showing {len(filtered)} of {len(tickets)} tickets")
-    render_ticket_table(filtered)
+    _render_ticket_rows(filtered)
 
-    if filtered:
-        st.markdown('<div class="fd-section">Ticket Detail</div>', unsafe_allow_html=True)
-        ticket_ids = [t["ticket_id"] for t in filtered]
-        chosen_id = st.selectbox("Select ticket to inspect", ticket_ids, key="admin_detail_select")
-        if chosen_id:
-            _show_ticket_detail(chosen_id)
+
+def _render_ticket_rows(filtered: list) -> None:
+    if not filtered:
+        st.html(
+            '<div style="padding:32px;text-align:center;color:#5A6480;font-size:0.88rem;'
+            'background:rgba(12,18,34,0.5);border-radius:12px;'
+            'border:1px solid rgba(255,255,255,0.04);">'
+            'No tickets here yet&#8202;&mdash; the campus is quiet.'
+            '</div>'
+        )
+        return
+
+    for t in filtered:
+        tid      = int(t["ticket_id"])
+        status   = t.get("status", "Open")
+        priority = t.get("priority", "Medium")
+        title    = t.get("title", "—")
+        dept     = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
+        date     = (t.get("created_at") or "")[:10]
+        sc       = _STATUS_COLOR.get(status, "#00E5FF")
+        pc       = _PRIORITY_COLOR.get(priority, "#00E5FF")
+        expanded = st.session_state.get("admin_expanded_ticket") == tid
+
+        col_card, col_toggle = st.columns([8, 1])
+
+        with col_card:
+            st.html(
+                f'<div style="background:rgba(20,26,46,0.7);border-radius:10px;padding:13px 16px;'
+                f'border-left:4px solid {sc};">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                f'<div>'
+                f'<span style="color:#7C4DFF;font-size:0.75rem;font-weight:700;">#{tid}</span>'
+                f'<span style="color:#E8ECF5;font-size:0.9rem;font-weight:600;margin-left:8px;">{title}</span>'
+                f'<br><span style="color:#8A94B0;font-size:0.75rem;margin-top:3px;display:inline-block;">'
+                f'{dept}&nbsp;&middot;&nbsp;{date}</span>'
+                f'</div>'
+                f'<div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">'
+                f'<span style="color:{pc};padding:2px 8px;border-radius:20px;font-size:0.68rem;'
+                f'font-weight:600;border:1px solid {pc}60;">{priority}</span>'
+                f'<span style="color:{sc};padding:2px 8px;border-radius:20px;font-size:0.68rem;'
+                f'font-weight:600;border:1px solid {sc}60;">{status}</span>'
+                f'</div>'
+                f'</div>'
+                f'</div>'
+            )
+
+        with col_toggle:
+            st.html("<div style='height:4px'></div>")
+            if st.button("▲" if expanded else "▼", key=f"row_expand_{tid}", use_container_width=True):
+                st.session_state["admin_expanded_ticket"] = None if expanded else tid
+                st.rerun()
+
+        if expanded:
+            with st.container(border=True):
+                _show_ticket_detail(tid)
+
+        st.html(
+            "<div style='height:1px;background:rgba(255,255,255,0.04);"
+            "margin:4px 0 12px 0;'></div>"
+        )
+
+
+_TRIAGE_ACTIVE_STATUSES = {"Open", "Escalated", "Reopened"}
+
+
+def _render_triage_rows(filtered: list) -> None:
+    if not filtered:
+        st.html(
+            '<div style="padding:32px;text-align:center;color:#5A6480;font-size:0.88rem;'
+            'background:rgba(12,18,34,0.5);border-radius:12px;'
+            'border:1px solid rgba(255,255,255,0.04);">'
+            'No tickets here yet&#8202;&mdash; the campus is quiet.'
+            '</div>'
+        )
+        return
+
+    for t in filtered:
+        tid        = int(t["ticket_id"])
+        status     = t.get("status", "Open")
+        priority   = t.get("priority", "Medium")
+        title      = t.get("title", "—")
+        dept       = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
+        date       = (t.get("created_at") or "")[:10]
+        sc         = _STATUS_COLOR.get(status, "#00E5FF")
+        pc         = _PRIORITY_COLOR.get(priority, "#00E5FF")
+        expanded   = st.session_state.get("triage_expanded_ticket") == tid
+        can_triage = status in _TRIAGE_ACTIVE_STATUSES
+
+        col_card, col_dtl, col_app, col_rej = st.columns([5, 1.5, 1, 1])
+
+        with col_card:
+            st.html(
+                f'<div style="background:rgba(20,26,46,0.7);border-radius:10px;padding:13px 16px;'
+                f'border-left:4px solid {sc};">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                f'<div>'
+                f'<span style="color:#7C4DFF;font-size:0.75rem;font-weight:700;">#{tid}</span>'
+                f'<span style="color:#E8ECF5;font-size:0.9rem;font-weight:600;margin-left:8px;">{title}</span>'
+                f'<br><span style="color:#8A94B0;font-size:0.75rem;margin-top:3px;display:inline-block;">'
+                f'{dept}&nbsp;&middot;&nbsp;{date}</span>'
+                f'</div>'
+                f'<div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">'
+                f'<span style="color:{pc};padding:2px 8px;border-radius:20px;font-size:0.68rem;'
+                f'font-weight:600;border:1px solid {pc}60;">{priority}</span>'
+                f'<span style="color:{sc};padding:2px 8px;border-radius:20px;font-size:0.68rem;'
+                f'font-weight:600;border:1px solid {sc}60;">{status}</span>'
+                f'</div>'
+                f'</div>'
+                f'</div>'
+            )
+
+        with col_dtl:
+            st.html("<div style='height:4px'></div>")
+            if st.button(
+                "▲ Hide" if expanded else "▼ Details",
+                key=f"triage_dtl_{tid}",
+                use_container_width=True,
+            ):
+                st.session_state["triage_expanded_ticket"] = None if expanded else tid
+                st.rerun()
+
+        with col_app:
+            st.html("<div style='height:4px'></div>")
+            if st.button(
+                "✓",
+                key=f"triage_app_{tid}",
+                use_container_width=True,
+                type="primary",
+                disabled=not can_triage,
+                help="Approve — forward to department" if can_triage else f"Already {status}",
+            ):
+                db.update_ticket(tid, TicketUpdate(status="Assigned"))
+                st.rerun()
+
+        with col_rej:
+            st.html("<div style='height:4px'></div>")
+            if st.button(
+                "✗",
+                key=f"triage_rej_{tid}",
+                use_container_width=True,
+                disabled=not can_triage,
+                help="Reject ticket" if can_triage else f"Already {status}",
+            ):
+                db.update_ticket(tid, TicketUpdate(status="Rejected"))
+                st.rerun()
+
+        if expanded:
+            with st.container(border=True):
+                _show_ticket_detail(tid)
+
+        st.html(
+            "<div style='height:1px;background:rgba(255,255,255,0.04);"
+            "margin:4px 0 12px 0;'></div>"
+        )
 
 
 def _show_analytics_charts(tickets: list) -> None:
@@ -186,64 +335,12 @@ def _show_metrics_detail(tickets: list) -> None:
     else:
         filtered = [t for t in tickets if t.get("status") == active]
 
-    departments = db.get_departments(include_inactive=True)
-    contact_map = {d["name"]: d.get("contact") or "—" for d in departments}
-
-    st.markdown(
-        f'<div style="background:rgba(12,18,40,0.85);border-radius:14px;'
-        f'padding:18px 22px;border:1px solid rgba(0,229,255,0.1);margin-top:12px;">'
+    st.html(
         f'<div style="font-size:0.72rem;color:#00E5FF;font-weight:700;letter-spacing:0.18em;'
-        f'text-transform:uppercase;margin-bottom:14px;">{active} Tickets — {len(filtered)} found</div>',
-        unsafe_allow_html=True,
+        f'text-transform:uppercase;margin:12px 0 8px 0;">'
+        f'{active} Tickets &mdash; {len(filtered)} found</div>'
     )
-
-    if not filtered:
-        st.markdown(
-            '<div style="color:#5A6480;font-size:0.88rem;padding-bottom:8px;">No tickets in this category.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        for t in sorted(filtered, key=lambda x: x["created_at"], reverse=True):
-            dept  = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
-            contact = contact_map.get(dept, "—")
-            status = t.get("status", "—")
-
-            if status in ("Resolved", "Closed"):
-                resolution_html = (
-                    f'<span style="color:#4CD97B;font-size:0.8rem;font-weight:600;">'
-                    f'✓ {status} on {(t.get("resolved_at") or t.get("closed_at") or "")[:10]}</span>'
-                )
-            else:
-                target = t.get("target_resolution_at") or t.get("sla_deadline")
-                if target:
-                    dl_str = target[:16].replace("T", " ")
-                    try:
-                        dl = datetime.fromisoformat(target)
-                        if dl.tzinfo is None:
-                            dl = dl.replace(tzinfo=timezone.utc)
-                        overdue = now > dl
-                    except Exception:
-                        overdue = False
-                    color = "#FF4D6D" if overdue else "#FFD700"
-                    prefix = "⚠ Overdue since" if overdue else "Target:"
-                    resolution_html = f'<span style="color:{color};font-size:0.8rem;font-weight:600;">{prefix} {dl_str}</span>'
-                else:
-                    resolution_html = '<span style="color:#5A6480;font-size:0.8rem;">No target set</span>'
-
-            st.markdown(
-                f'<div style="display:grid;grid-template-columns:2fr 1.2fr 1.5fr;gap:12px;'
-                f'align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
-                f'<div><span style="color:#7C4DFF;font-size:0.78rem;font-weight:700;">#{t["ticket_id"]}</span> '
-                f'<span style="color:#C8D0E8;font-size:0.88rem;font-weight:600;">{t["title"]}</span></div>'
-                f'<div><div style="color:#8A94B0;font-size:0.75rem;text-transform:uppercase;'
-                f'letter-spacing:0.08em;margin-bottom:2px;">{dept}</div>'
-                f'<div style="color:#5A6480;font-size:0.78rem;">📞 {contact}</div></div>'
-                f'<div>{resolution_html}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-    st.markdown('</div>', unsafe_allow_html=True)
+    _render_triage_rows(sorted(filtered, key=lambda x: x["created_at"], reverse=True))
 
 
 def _show_department_manager() -> None:
