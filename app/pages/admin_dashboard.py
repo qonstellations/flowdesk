@@ -244,7 +244,7 @@ def _render_triage_rows(filtered: list) -> None:
                 disabled=not can_triage,
                 help="Approve — forward to department" if can_triage else f"Already {status}",
             ):
-                db.update_ticket(tid, TicketUpdate(status="Assigned"))
+                db.update_ticket(tid, TicketUpdate(status="Escalated"))
                 st.rerun()
 
         with col_rej:

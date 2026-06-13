@@ -416,10 +416,10 @@ def update_ticket(ticket_id: int, update: TicketUpdate) -> None:
 
     # ── Email flow integration (connected to frontend logic) ──────────────────
     validation_token_to_send = None
-    status_is_assigned = (update.status == "Assigned") or (update.status is None and current.get("status") == "Assigned")
+    status_is_assigned_or_escalated = (update.status in ("Assigned", "Escalated")) or (update.status is None and current.get("status") in ("Assigned", "Escalated"))
     dept_is_changing = (update.department_id is not None and update.department_id != current.get("department_id"))
     
-    if (update.status == "Assigned" and current.get("status") != "Assigned") or (status_is_assigned and dept_is_changing):
+    if (update.status in ("Assigned", "Escalated") and current.get("status") not in ("Assigned", "Escalated")) or (status_is_assigned_or_escalated and dept_is_changing):
         import secrets
         validation_token_to_send = secrets.token_urlsafe(24)
         fields.append("admin_approved = ?")
