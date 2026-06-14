@@ -203,10 +203,13 @@ data/mock_emails/
 FlowDesk is an **active MVP**. The main loop is fully in place:
 
 ✅ Verified student intake via Telegram
+
 ✅ Complaint validation with AI follow-ups
+
 ✅ LLM-assisted routing & classification
-✅ Admin triage dashboard
+
 ✅ Department escalation via email
+
 ✅ Secure one-click resolution tracking
 
 ---
