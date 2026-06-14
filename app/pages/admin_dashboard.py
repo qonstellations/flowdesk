@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 import streamlit as st
 
 import backend.db as db
-from backend.escalation import escalate_overdue_tickets
 from components.metrics_bar import render_metrics_bar
 from components.ticket_detail import render_ticket_detail
 from components.ticket_table import render_ticket_table
@@ -19,16 +18,7 @@ def render() -> None:
     _show_metrics_detail(tickets)
     st.markdown("---")
 
-    col_target, col_refresh, col_space = st.columns([2, 1, 3])
-    with col_target:
-        if st.button("Escalated Tickets", use_container_width=True, type="primary"):
-            count = escalate_overdue_tickets()
-            if count:
-                st.success(f"Escalated {count} overdue ticket(s).")
-                st.rerun()
-            else:
-                st.info("No overdue tickets to escalate.")
-
+    col_refresh, col_space = st.columns([1, 5])
     with col_refresh:
         if st.button("🔄 Refresh", use_container_width=True):
             st.rerun()
@@ -189,61 +179,57 @@ def _show_metrics_detail(tickets: list) -> None:
     departments = db.get_departments(include_inactive=True)
     contact_map = {d["name"]: d.get("contact") or "—" for d in departments}
 
-    st.markdown(
+    rows_html = ""
+    for t in sorted(filtered, key=lambda x: x["created_at"], reverse=True):
+        dept    = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
+        contact = contact_map.get(dept, "—")
+        status  = t.get("status", "—")
+
+        if status in ("Resolved", "Closed"):
+            resolution_html = (
+                f'<span style="color:#4CD97B;font-size:0.8rem;font-weight:600;">'
+                f'✓ {status} on {(t.get("resolved_at") or t.get("closed_at") or "")[:10]}</span>'
+            )
+        else:
+            target = t.get("target_resolution_at") or t.get("sla_deadline")
+            if target:
+                dl_str = target[:16].replace("T", " ")
+                try:
+                    dl = datetime.fromisoformat(target)
+                    if dl.tzinfo is None:
+                        dl = dl.replace(tzinfo=timezone.utc)
+                    overdue = now > dl
+                except Exception:
+                    overdue = False
+                color  = "#FF4D6D" if overdue else "#FFD700"
+                prefix = "⚠ Overdue since" if overdue else "Target:"
+                resolution_html = f'<span style="color:{color};font-size:0.8rem;font-weight:600;">{prefix} {dl_str}</span>'
+            else:
+                resolution_html = '<span style="color:#5A6480;font-size:0.8rem;">No target set</span>'
+
+        rows_html += (
+            f'<div style="display:grid;grid-template-columns:2fr 1.2fr 1.5fr;gap:12px;'
+            f'align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+            f'<div><span style="color:#7C4DFF;font-size:0.78rem;font-weight:700;">#{t["ticket_id"]}</span> '
+            f'<span style="color:#C8D0E8;font-size:0.88rem;font-weight:600;">{t["title"]}</span></div>'
+            f'<div><div style="color:#8A94B0;font-size:0.75rem;text-transform:uppercase;'
+            f'letter-spacing:0.08em;margin-bottom:2px;">{dept}</div>'
+            f'<div style="color:#5A6480;font-size:0.78rem;">📞 {contact}</div></div>'
+            f'<div>{resolution_html}</div>'
+            f'</div>'
+        )
+
+    if not filtered:
+        rows_html = '<div style="color:#5A6480;font-size:0.88rem;padding-bottom:8px;">No tickets in this category.</div>'
+
+    st.html(
         f'<div style="background:rgba(12,18,40,0.85);border-radius:14px;'
         f'padding:18px 22px;border:1px solid rgba(0,229,255,0.1);margin-top:12px;">'
         f'<div style="font-size:0.72rem;color:#00E5FF;font-weight:700;letter-spacing:0.18em;'
-        f'text-transform:uppercase;margin-bottom:14px;">{active} Tickets — {len(filtered)} found</div>',
-        unsafe_allow_html=True,
+        f'text-transform:uppercase;margin-bottom:14px;">{active} Tickets — {len(filtered)} found</div>'
+        f'{rows_html}'
+        f'</div>'
     )
-
-    if not filtered:
-        st.markdown(
-            '<div style="color:#5A6480;font-size:0.88rem;padding-bottom:8px;">No tickets in this category.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        for t in sorted(filtered, key=lambda x: x["created_at"], reverse=True):
-            dept  = t.get("department_name") or t.get("assigned_dept") or "Unassigned"
-            contact = contact_map.get(dept, "—")
-            status = t.get("status", "—")
-
-            if status in ("Resolved", "Closed"):
-                resolution_html = (
-                    f'<span style="color:#4CD97B;font-size:0.8rem;font-weight:600;">'
-                    f'✓ {status} on {(t.get("resolved_at") or t.get("closed_at") or "")[:10]}</span>'
-                )
-            else:
-                target = t.get("target_resolution_at") or t.get("sla_deadline")
-                if target:
-                    dl_str = target[:16].replace("T", " ")
-                    try:
-                        dl = datetime.fromisoformat(target)
-                        if dl.tzinfo is None:
-                            dl = dl.replace(tzinfo=timezone.utc)
-                        overdue = now > dl
-                    except Exception:
-                        overdue = False
-                    color = "#FF4D6D" if overdue else "#FFD700"
-                    prefix = "⚠ Overdue since" if overdue else "Target:"
-                    resolution_html = f'<span style="color:{color};font-size:0.8rem;font-weight:600;">{prefix} {dl_str}</span>'
-                else:
-                    resolution_html = '<span style="color:#5A6480;font-size:0.8rem;">No target set</span>'
-
-            st.markdown(
-                f'<div style="display:grid;grid-template-columns:2fr 1.2fr 1.5fr;gap:12px;'
-                f'align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
-                f'<div><span style="color:#7C4DFF;font-size:0.78rem;font-weight:700;">#{t["ticket_id"]}</span> '
-                f'<span style="color:#C8D0E8;font-size:0.88rem;font-weight:600;">{t["title"]}</span></div>'
-                f'<div><div style="color:#8A94B0;font-size:0.75rem;text-transform:uppercase;'
-                f'letter-spacing:0.08em;margin-bottom:2px;">{dept}</div>'
-                f'<div style="color:#5A6480;font-size:0.78rem;">📞 {contact}</div></div>'
-                f'<div>{resolution_html}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _show_department_manager() -> None:

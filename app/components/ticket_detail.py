@@ -147,39 +147,44 @@ def render_ticket_detail(
     )
 
     # ── Section 2: Metadata grid ──────────────────────────────────────────
-    left_html  = ""
-    right_html = ""
-
-    left_html  += _meta_cell("Submitted by",  ticket.get("telegram_id") or "—")
-    left_html  += _meta_cell("Location",      ticket.get("location") or "Unknown")
-    left_html  += _meta_cell("Assigned dept", department,
-                              "#4CD97B" if department != "Unassigned" else "#5A6480")
-    if ticket.get("routing_confidence") is not None:
-        left_html += _meta_cell("Routing confidence", f"{float(ticket['routing_confidence']):.0%}", "#7C4DFF")
-
-    target_val = _fmt_ts(ticket.get("target_resolution_at") or ticket.get("sla_deadline"))
-    target_color = "#FF4D6D" if overdue else "#FFD700"
-    right_html += _meta_cell("Created",     _fmt_ts(ticket.get("created_at")))
-    right_html += _meta_cell("Last updated", _fmt_ts(ticket.get("updated_at")))
-    right_html += _meta_cell("Target resolution", target_val, target_color)
-    if ticket.get("resolved_at"):
-        right_html += _meta_cell("Resolved at", _fmt_ts(ticket["resolved_at"]), "#4CD97B")
-    if ticket.get("closed_at"):
-        right_html += _meta_cell("Closed at",   _fmt_ts(ticket["closed_at"]),   "#8A94B0")
-
-    st.markdown(
-        f"""
-        <div style="background:rgba(10,16,34,0.7);padding:18px 24px;
-                    border-left:4px solid {'#FF4D6D' if overdue else sc};
-                    border-top:1px solid rgba(255,255,255,0.04);">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 32px;">
-                <div>{left_html}</div>
-                <div>{right_html}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    border_color = "#FF4D6D" if overdue else sc
+    st.html(
+        f'<div style="background:rgba(10,16,34,0.7);padding:12px 24px 2px 24px;'
+        f'border-left:4px solid {border_color};'
+        f'border-top:1px solid rgba(255,255,255,0.04);"></div>'
     )
+
+    col_left, col_right = st.columns(2)
+
+    target_val   = _fmt_ts(ticket.get("target_resolution_at") or ticket.get("sla_deadline"))
+    target_color = "#FF4D6D" if overdue else "#FFD700"
+
+    with col_left:
+        left_cells = (
+            _meta_cell("Submitted by", ticket.get("telegram_id") or "—") +
+            _meta_cell("Location",     ticket.get("location") or "—") +
+            _meta_cell("Assigned dept", department,
+                       "#4CD97B" if department != "Unassigned" else "#5A6480")
+        )
+        if ticket.get("routing_confidence") is not None:
+            left_cells += _meta_cell(
+                "Routing confidence",
+                f"{float(ticket['routing_confidence']):.0%}",
+                "#7C4DFF",
+            )
+        st.html(f'<div style="padding:10px 4px 4px 4px;">{left_cells}</div>')
+
+    with col_right:
+        right_cells = (
+            _meta_cell("Created",           _fmt_ts(ticket.get("created_at"))) +
+            _meta_cell("Last updated",      _fmt_ts(ticket.get("updated_at"))) +
+            _meta_cell("Target resolution", target_val, target_color)
+        )
+        if ticket.get("resolved_at"):
+            right_cells += _meta_cell("Resolved at", _fmt_ts(ticket["resolved_at"]), "#4CD97B")
+        if ticket.get("closed_at"):
+            right_cells += _meta_cell("Closed at",   _fmt_ts(ticket["closed_at"]),   "#8A94B0")
+        st.html(f'<div style="padding:10px 4px 4px 4px;">{right_cells}</div>')
 
     # ── Section 3: Description ────────────────────────────────────────────
     with st.expander("📄 Full Description", expanded=False):

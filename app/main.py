@@ -18,6 +18,29 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+if not st.session_state.get("_loader_shown"):
+    st.session_state["_loader_shown"] = True
+    st.html("""<style>
+@keyframes _fd_bar{0%{width:0}40%{width:60%}75%{width:87%}92%{width:97%}100%{width:100%}}
+@keyframes _fd_out{0%{opacity:1}100%{opacity:0;visibility:hidden;pointer-events:none}}
+</style>
+<div style="position:fixed;inset:0;background:#050C1A;z-index:99999;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            pointer-events:none;animation:_fd_out .45s ease-out 3.2s forwards;">
+  <div style="font-size:2.8rem;font-weight:900;letter-spacing:-0.04em;color:#00E5FF;
+              text-shadow:0 0 40px rgba(0,229,255,0.5);margin-bottom:1.8rem;
+              font-family:system-ui,sans-serif;">FlowDesk</div>
+  <div style="width:360px;height:5px;background:rgba(255,255,255,0.07);
+              border-radius:3px;overflow:hidden;">
+    <div style="height:100%;width:0;background:#00E5FF;border-radius:3px;
+                box-shadow:0 0 12px rgba(0,229,255,0.6);
+                animation:_fd_bar 3.2s cubic-bezier(.4,0,.2,1) forwards;"></div>
+  </div>
+  <div style="margin-top:1.2rem;font-size:0.72rem;letter-spacing:0.22em;
+              text-transform:uppercase;color:#3A4468;font-family:system-ui,sans-serif;">
+    Autonomous Campus Issue Resolution</div>
+</div>""")
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap');
@@ -706,11 +729,7 @@ with nav_col1:
 with nav_col2:
     if st.session_state.page != "landing":
         st.markdown("<div style='padding-top:1.2rem'>", unsafe_allow_html=True)
-        if st.session_state.page == "portal_admin":
-            nb1, nb2, nb3 = st.columns(3)
-        else:
-            nb1, nb2 = st.columns(2)
-            nb3 = None
+        nb1, nb2 = st.columns(2)
         with nb1:
             if st.button("⌂ Home", use_container_width=True, key="nav_home"):
                 st.session_state["_nav_override"] = True
@@ -721,12 +740,6 @@ with nav_col2:
                 st.session_state["_nav_override"] = True
                 st.session_state.page = _back_dest
                 st.rerun()
-        if nb3:
-            with nb3:
-                if st.button("🎓 Student", use_container_width=True, key="nav_student"):
-                    st.session_state["_nav_override"] = True
-                    st.session_state.page = "login_student"
-                    st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -873,30 +886,26 @@ if page == "landing":
     </div>
     """, unsafe_allow_html=True)
 
-    _, c1, c2, _ = st.columns([1, 2, 2, 1])
+    _, c1, c2, _ = st.columns([1, 2, 2, 1], gap="large")
 
     with c1:
-        st.markdown("""
-        <div class="role-card role-card-student">
+        st.html("""<div class="role-card role-card-student">
             <div class="role-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
             <div class="role-title role-title-student">Student Portal</div>
             <div class="role-desc">Submit complaints, track your tickets, and get real-time updates on resolution status.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
+        </div>""")
+        st.html("<div style='margin-top:1rem'></div>")
         if st.button("Enter as Student →", key="btn_student", use_container_width=True, type="primary"):
             st.session_state.page = "login_student"
             st.rerun()
 
     with c2:
-        st.markdown("""
-        <div class="role-card role-card-admin">
+        st.html("""<div class="role-card role-card-admin">
             <div class="role-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFA500" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg></div>
             <div class="role-title role-title-admin">Admin Dashboard</div>
             <div class="role-desc">Full system oversight — metrics, target resolution, escalations, and analytics.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:1rem'/>", unsafe_allow_html=True)
+        </div>""")
+        st.html("<div style='margin-top:1rem'></div>")
         if st.button("Enter as Admin →", key="btn_admin", use_container_width=True, type="primary"):
             st.session_state.page = "login_admin"
             st.rerun()
