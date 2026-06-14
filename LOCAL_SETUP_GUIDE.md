@@ -6,6 +6,7 @@ This guide gets FlowDesk running on a fresh machine with:
 - FastAPI Telegram webhook backend
 - ngrok public URL for Telegram and Google OAuth callbacks
 - Google OAuth for student login and Telegram linking
+- Department escalation emails and secure resolution links
 - Gemini, OpenAI, or Ollama for LLM calls
 
 ## 1. Install Prerequisites
@@ -189,9 +190,23 @@ GOOGLE_REDIRECT_URI=https://abc123.ngrok-free.app/auth/google/callback
 
 ALLOWED_EMAIL_DOMAINS=
 DATABASE_PATH=data/flowdesk.db
+
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=noreply@flowdesk.edu
+BASE_URL=http://localhost:8000
 ```
 
 `ALLOWED_EMAIL_DOMAINS=` can stay empty. That allows any verified Google account.
+
+Email can run in mock mode. If `SMTP_HOST` or `SMTP_USER` is empty, FlowDesk writes generated emails to `data/mock_emails/` instead of sending real messages.
+
+`BASE_URL` is used inside department resolution links:
+
+- Use `http://localhost:8000` for local mock-email testing on your own machine.
+- Use your ngrok HTTPS URL, for example `https://abc123.ngrok-free.app`, if real recipients need to open the link from email.
 
 ## 4. Create Streamlit Secrets
 
@@ -286,9 +301,33 @@ Email ID: admin@example.com
 Active: checked
 ```
 
-The bot cannot route tickets until at least one active department exists.
+The bot cannot route tickets until at least one active department exists. The `Email ID` field is also used for escalation emails. If a department has no email, the current dev build falls back to a test email address.
 
-## 7. Student Flow
+## 7. Email and Escalation Flow
+
+Recent commits added admin validation and department resolution emails.
+
+1. Create a ticket from Telegram.
+2. Open Admin Dashboard.
+3. Approve the ticket. Approved open tickets now move to `Escalated`.
+4. FlowDesk generates a secure completion link and sends it to the assigned department email.
+5. In mock mode, open the generated HTML file in `data/mock_emails/` and click `Mark Ticket Resolved`.
+6. Keep the FastAPI backend running while testing the link, because it calls `/api/tickets/complete`.
+
+For real SMTP delivery, fill these in `.env`:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=noreply@flowdesk.edu
+BASE_URL=https://abc123.ngrok-free.app
+```
+
+Current dev behavior: student resolution notifications are temporarily routed to a test email address in `backend/email_routes.py`. Department emails use the department `Email ID` when present.
+
+## 8. Student Flow
 
 ### Link Telegram to Google
 
@@ -321,7 +360,7 @@ In Telegram:
 
 Or open the Streamlit frontend, enter Student Portal, and log in with Google.
 
-## 8. Common Problems
+## 9. Common Problems
 
 ### Telegram says webhook failed
 
@@ -370,6 +409,25 @@ ADMIN_KEY=some-value
 
 Restart Streamlit after changing `.env`.
 
+### No email arrived after approving a ticket
+
+Check:
+
+- The assigned department has an `Email ID`.
+- SMTP variables are set if you expect real delivery.
+- If SMTP is not configured, check `data/mock_emails/`.
+- `BASE_URL` points to a reachable backend URL.
+- The FastAPI backend is running on port `8000`.
+
+### Department resolution link does not work
+
+Check:
+
+- The backend is running.
+- `BASE_URL` matches the backend URL that the email recipient can reach.
+- If using ngrok, the tunnel is still active and `.env` has the current ngrok URL.
+- The link has not already been used. Resolution links are one-time links.
+
 ### Ollama times out
 
 Use a smaller model or increase timeout:
@@ -397,7 +455,7 @@ LLM_MODEL=gemini-2.0-flash
 
 or use a stronger local instruct model.
 
-## 9. Reset Local Data
+## 10. Reset Local Data
 
 To reset the local database:
 
@@ -406,4 +464,3 @@ rm -f data/flowdesk.db
 ```
 
 Then restart the backend or frontend. The DB schema is recreated automatically.
-
