@@ -1,172 +1,223 @@
-# FlowDesk
+# 🏫 FlowDesk — Smart Campus Complaint Workflow
 
-Campus complaints usually do not fail because nobody cares.
+> **Campus complaints don't fail because nobody cares. They fail because the system around them is messy.**
 
-They fail because the system around them is messy.
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Streamlit](https://img.shields.io/badge/Frontend-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io)
+[![Telegram](https://img.shields.io/badge/Bot-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://core.telegram.org/bots)
+[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org)
+[![Google OAuth](https://img.shields.io/badge/Auth-Google_OAuth-4285F4?style=flat-square&logo=google&logoColor=white)](https://developers.google.com/identity)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-A student reports that the Wi-Fi is down, a fan is broken, water is leaking, or a classroom projector is dead. The message lands in the wrong chat, gets forwarded twice, loses context, and eventually becomes someone else's problem. By the time the right department sees it, nobody knows who raised it, how urgent it is, or whether it was already handled.
+---
 
-FlowDesk is a campus complaint workflow built to make that chain less chaotic.
+## 😤 The Problem
 
-It takes student complaints from Telegram, verifies the student through Google OAuth, turns the message into a structured ticket, routes it to the right department, gives admins a dashboard to validate and track it, and sends departments secure resolution links when work is ready to be closed.
+A student reports broken Wi-Fi, a leaking pipe, or a dead projector. The message lands in the wrong chat, gets forwarded twice, loses context, and becomes someone else's problem.
 
+**Informal systems** (WhatsApp, email) are fast but impossible to track:
 
-## The Problem
+- 💬 Messages buried under newer messages
+- 🔀 Email threads split across departments
+- ❓ Students never know if anyone saw the complaint
+- ⏰ Admins can't tell what's overdue
 
-Most campus complaint systems are either too informal or too heavy.
+**Heavy systems** (portals, forms) solve tracking but students avoid them:
 
-Informal systems are fast, but hard to track:
+- 📋 Too many forms
+- 🔐 Too many login walls
+- 🚫 Too much friction for a broken fan
 
-- WhatsApp messages disappear under newer messages.
-- Email threads split across departments.
-- Students do not know whether anyone saw the complaint.
-- Admins cannot easily tell what is overdue.
-- Departments get incomplete reports with missing location or context.
+> FlowDesk sits between those two extremes — lightweight for students, structured for the institution.
 
-Heavy systems solve tracking, but students avoid them:
+---
 
-- Too many forms.
-- Too many portals.
-- Too much friction for a broken fan or bad Wi-Fi.
+## 💡 The Solution
 
-FlowDesk sits between those two extremes: students use a lightweight channel they already understand, while the institution gets a real ticket lifecycle behind it.
+FlowDesk turns a plain-language Telegram message into a fully tracked operational workflow.
 
-## The Solution
-
-FlowDesk turns a plain-language complaint into an operational workflow.
-
-```text
-Student message
-    -> validation and clarification
-    -> AI-assisted classification
-    -> department routing
-    -> admin review
-    -> escalation email
-    -> secure resolution link
-    -> student-visible ticket history
+```mermaid
+graph LR
+    A[💬 Student Message\nvia Telegram] --> B[🔍 Validation\n& Clarification]
+    B --> C[🤖 AI Classification\nGemini / OpenAI / Ollama]
+    C --> D[📋 Ticket Created\nDept · Priority · SLA]
+    D --> E[🛡️ Admin Review\nApprove / Reject]
+    E --> F[📧 Escalation Email\nto Department]
+    F --> G[🔗 Secure Resolution Link]
+    G --> H[✅ Resolved\nStudent Notified]
 ```
 
-The product is intentionally simple at the surface. A student can type:
+A student simply types:
 
-```text
+```
 /ticket Wi-Fi is not working in the library second floor
 ```
 
-Behind that message, FlowDesk handles identity, validation, routing, priority, department assignment, SLA tracking, and event history.
+Behind that message, FlowDesk handles **identity verification, validation, routing, priority, department assignment, SLA tracking, and event history**.
 
-## What It Actually Does
+---
 
-### For Students
+## ✨ Features
 
-- Creates tickets directly from Telegram.
-- Links Telegram users to verified Google accounts.
-- Asks follow-up questions when the complaint is too vague.
-- Shows ticket status through `/status` and the Student Portal.
-- Keeps complaint history tied to the verified student identity.
+### 🎓 For Students
 
-### For Admins
+| Feature | Description |
+|---------|-------------|
+| **Telegram Intake** | Create tickets directly from Telegram — no app downloads |
+| **Google Identity** | Link Telegram to verified Google account via `/link` |
+| **Smart Follow-ups** | AI asks clarifying questions when complaints are too vague |
+| **Live Status** | Check ticket progress via `/status` or the Student Portal |
+| **Full History** | Complaint history tied to verified student identity |
 
-- Provides a Streamlit dashboard for ticket review and operations.
-- Supports approval, rejection, reassignment, and status updates.
-- Tracks department, priority, SLA, overdue tickets, and event history.
-- Lets admins manage departments and escalation email IDs.
-- Moves approved open tickets into `Escalated` for department action.
+### 🛡️ For Admins
 
-### For Departments
+| Feature | Description |
+|---------|-------------|
+| **Streamlit Dashboard** | Review, approve, reject, and reassign tickets |
+| **SLA Tracking** | Track department, priority, overdue tickets, and event logs |
+| **Department Management** | Manage departments and escalation email IDs |
+| **Auto-Escalation** | Approved tickets move to `Escalated` for department action |
 
-- Receives structured escalation emails.
-- Gets ticket details without needing dashboard access.
-- Marks work resolved through a secure one-time link.
-- Feeds resolution state back into FlowDesk.
+### 🏢 For Departments
 
-## Why Telegram?
+| Feature | Description |
+|---------|-------------|
+| **Structured Emails** | Receive formatted escalation emails with full ticket context |
+| **No Dashboard Needed** | Get ticket details without needing login access |
+| **One-Click Resolution** | Mark work resolved through a secure one-time link |
+
+---
+
+## 💬 Why Telegram?
 
 Because complaint intake should not start with a login wall.
 
-Telegram gives students a low-friction entry point, while Google OAuth gives the backend a verified identity. That combination keeps the reporting experience lightweight without making the system anonymous or untrackable.
+Telegram gives students a **low-friction entry point**, while Google OAuth gives the backend a **verified identity**. The combination keeps reporting lightweight without making the system anonymous or untrackable.
 
-## Technical Shape
+---
 
-| Area | Implementation |
-| --- | --- |
-| Student intake | Telegram Bot API |
-| Frontend | Streamlit |
-| Backend | FastAPI |
-| Auth | Google OAuth |
-| Data store | SQLite |
-| Routing intelligence | Gemini, OpenAI, or Ollama |
-| Email flow | SMTP with local mock-email fallback |
-| Public local callbacks | ngrok |
+## 🛠️ Tech Stack
 
-## Core Flow
+| Layer | Technology | Badge |
+|-------|-----------|-------|
+| **Student Intake** | Telegram Bot API | ![Telegram](https://img.shields.io/badge/-Telegram_Bot-26A5E4?style=flat-square&logo=telegram&logoColor=white) |
+| **Frontend** | Streamlit | ![Streamlit](https://img.shields.io/badge/-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white) |
+| **Backend** | FastAPI | ![FastAPI](https://img.shields.io/badge/-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white) |
+| **Auth** | Google OAuth | ![Google](https://img.shields.io/badge/-Google_OAuth-4285F4?style=flat-square&logo=google&logoColor=white) |
+| **Database** | SQLite | ![SQLite](https://img.shields.io/badge/-SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white) |
+| **AI Routing** | Gemini / OpenAI / Ollama | ![AI](https://img.shields.io/badge/-LLM_Powered-412991?style=flat-square&logo=openai&logoColor=white) |
+| **Email** | SMTP (mock-email fallback) | ![Email](https://img.shields.io/badge/-SMTP-EA4335?style=flat-square&logo=gmail&logoColor=white) |
+| **Tunneling** | ngrok | ![ngrok](https://img.shields.io/badge/-ngrok-1F1E37?style=flat-square&logo=ngrok&logoColor=white) |
 
-1. Student links Telegram with Google using `/link`.
-2. Student submits a complaint using `/ticket`.
-3. FlowDesk validates the complaint and asks for missing details if needed.
-4. The LLM classifies the issue and suggests routing metadata.
-5. A ticket is created with department, priority, SLA, and event history.
-6. Admin reviews the ticket and approves or rejects it.
-7. Approved tickets move to `Escalated`.
-8. Department receives a resolution email.
-9. Department clicks a secure link after completing the work.
-10. Ticket is marked resolved and remains visible in history.
+---
 
-## Local Development
+## 🔄 Core Flow
 
-For the full setup, including Telegram, Google OAuth, ngrok, SMTP, and LLM configuration:
+```
+1. 🔗  Student links Telegram with Google using /link
+2. 📝  Student submits complaint using /ticket
+3. 🔍  FlowDesk validates and asks for missing details
+4. 🤖  LLM classifies issue and suggests routing metadata
+5. 📋  Ticket created with department, priority, SLA, and history
+6. 🛡️  Admin reviews — approves or rejects
+7. 📧  Approved tickets move to Escalated → department gets email
+8. 🔗  Department clicks secure link after completing work
+9. ✅  Ticket marked resolved — visible in student history
+```
 
-[LOCAL_SETUP_GUIDE.md](LOCAL_SETUP_GUIDE.md)
+---
 
-Quick start:
+## 🚀 Quick Start
+
+> For the full setup (Telegram, Google OAuth, ngrok, SMTP, LLM config), see **[LOCAL_SETUP_GUIDE.md](LOCAL_SETUP_GUIDE.md)**
+
+### Prerequisites
+
+- 🐍 Python 3.11+
+- 🤖 Telegram Bot Token
+- 🔑 Google OAuth Credentials
+- 🌐 ngrok account (for local callbacks)
+
+### Installation
 
 ```bash
 git clone https://github.com/qonstellations/flowdesk.git
 cd flowdesk
 uv sync
 cp .env.example .env
+# Edit .env with your keys
 ```
 
-Run the backend:
+### Run Backend
 
 ```bash
 uv run uvicorn backend.webhook:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Run the frontend:
+### Run Frontend
 
 ```bash
 uv run streamlit run app/main.py
 ```
 
-Open:
+### Open
 
-```text
+```
 http://localhost:8501
 ```
 
-## Email Behavior
+---
 
-FlowDesk can send real emails through SMTP, but local development does not require SMTP.
+## 📧 Email Behavior
+
+FlowDesk supports real SMTP email, but **local development doesn't require it**.
 
 If `SMTP_HOST` or `SMTP_USER` is empty, generated emails are written to:
 
-```text
+```
 data/mock_emails/
 ```
 
-That makes the department escalation flow testable without sending real mail. For real recipients, configure SMTP and set `BASE_URL` to a public backend URL such as an ngrok HTTPS URL.
+> [!TIP]
+> This makes the department escalation flow fully testable without sending real mail. For real recipients, configure SMTP and set `BASE_URL` to a public URL (e.g., an ngrok HTTPS URL).
 
-## Repository Map
+---
 
-```text
-app/                  Streamlit frontend
-app/pages/            Admin dashboard and student portal
-app/components/       Shared ticket UI components
-backend/              FastAPI, Telegram, auth, workflow, DB, email
-LOCAL_SETUP_GUIDE.md  Full local setup instructions
-.env.example          Environment variable template
+## 📁 Repository Map
+
+```
+📦 flowdesk
+├── 📂 app/                  Streamlit frontend
+│   ├── 📂 pages/            Admin dashboard & student portal
+│   └── 📂 components/       Shared ticket UI components
+├── 📂 backend/              FastAPI, Telegram, auth, workflow, DB, email
+├── 📄 LOCAL_SETUP_GUIDE.md  Full local setup instructions
+├── 📄 .env.example          Environment variable template
+└── 📄 README.md             You are here
 ```
 
-## Current Status
+---
 
-FlowDesk is an active MVP. The main loop is in place: verified student intake, complaint validation, AI-assisted routing, admin triage, department escalation, and resolution tracking.
+## 📌 Current Status
+
+FlowDesk is an **active MVP**. The main loop is fully in place:
+
+✅ Verified student intake via Telegram
+✅ Complaint validation with AI follow-ups
+✅ LLM-assisted routing & classification
+✅ Admin triage dashboard
+✅ Department escalation via email
+✅ Secure one-click resolution tracking
+
+---
+
+## 📜 License
+
+MIT — see [LICENSE](LICENSE)
+
+---
+
+<p align="center">
+  Built with ❤️ by <strong>Team Makhan Chor</strong>
+</p>
